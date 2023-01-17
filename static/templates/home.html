@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+  <head>
+    <title>File Upload</title>
+  </head>
+  <body>
+    <h1>File Upload Page</h1>
+    <form
+      enctype="multipart/form-data"
+      action="http://localhost:8080/upload"
+      method="post"
+    >
+      <input type="file" name="uploadingFile" />
+      <input type="submit" value="upload" />
+    </form>
+    <h3>Загруженные файлы:</h3>
+    <ul>
+      {{range .}}
+        <li>{{Basing .Name}}</li>
+      {{end}}
+    </ul>
+  </body>
+</html>

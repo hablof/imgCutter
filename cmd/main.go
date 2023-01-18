@@ -16,20 +16,6 @@ type uploadingFileManager struct {
 	tempFiles []*os.File
 }
 
-// func (h uploadingFileManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-// 	if r.URL.Path != "/" {
-// 		http.NotFound(w, r)
-// 		return
-// 	}
-
-// 	switch r.Method {
-// 	case http.MethodGet:
-// 		h.uploadFileSetup(w, r)
-// 	case http.MethodPost:
-// 		h.uploadFile(w, r)
-// 	}
-// }
-
 func (h *uploadingFileManager) uploadFileSetup(w http.ResponseWriter, r *http.Request) {
 	buf := bytes.Buffer{}
 	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.tempFiles); err != nil {
@@ -57,9 +43,10 @@ func (h *uploadingFileManager) uploadFile(w http.ResponseWriter, r *http.Request
 
 	var localFile *os.File
 	contentType := fileHeader.Header.Get("content-type")
+	fileName := fileHeader.Filename
 	switch contentType {
 	case "image/jpeg", "image/png":
-		localFile, err = os.Create(fmt.Sprintf("temp/%s", fileHeader.Filename))
+		localFile, err = os.Create(fmt.Sprintf("temp/%s", fileName))
 		if err != nil {
 			log.Printf("error uploading file: %s", err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -84,7 +71,7 @@ func (h *uploadingFileManager) uploadFile(w http.ResponseWriter, r *http.Request
 	h.tempFiles = append(h.tempFiles, localFile)
 
 	w.WriteHeader(http.StatusBadRequest)
-	log.Print("file succsesfully uploaded")
+	log.Printf("file %s succsesfully uploaded", fileName)
 	fmt.Fprint(w, "file succsesfully uploaded")
 
 }
@@ -98,14 +85,13 @@ func newUploadingFileManager(template *template.Template) uploadingFileManager {
 
 func main() {
 	ts, err := template.New("home.html").Funcs(template.FuncMap{
-		"Basing": filepath.Base,
+		"base": filepath.Base,
 	}).ParseFiles("./static/templates/home.html")
 	if err != nil {
 		log.Println(err.Error())
 		return
 	}
 
-	//fmt.Printf("ts.Tree: %v\n", ts.Tree)
 	uploadingFileHandler := newUploadingFileManager(ts)
 
 	http.HandleFunc("/", uploadingFileHandler.uploadFileSetup)

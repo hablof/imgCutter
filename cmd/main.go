@@ -4,16 +4,59 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"imgCutter/internal"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+
+	_ "image/jpeg"
+	_ "image/png"
 )
+
+type myFile struct {
+	Name    string
+	Archive string
+}
 
 type uploadingFileManager struct {
 	ts        *template.Template
-	tempFiles []*os.File
+	tempFiles []myFile
+}
+
+func (h *uploadingFileManager) cutFile(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		log.Printf("err parsing form: %v", err)
+		return
+	}
+	fileName := r.PostForm.Get("fileName")
+	dX, err := strconv.Atoi(r.PostForm.Get("dX"))
+	if err != nil {
+		log.Printf("error parsing dX: %v", err)
+		return
+	}
+	dY, err := strconv.Atoi(r.PostForm.Get("dY"))
+	if err != nil {
+		log.Printf("error parsing dY: %v", err)
+		return
+	}
+	fmt.Printf("fileName: %v\n, dX: %v\n, dY: %v\n", fileName, dX, dY)
+
+	archiveName, err2 := internal.ProcessImage(fileName, dX, dY)
+	if err2 != nil {
+		log.Printf("error processing img: %v", err2)
+		return
+	}
+
+	for i, elem := range h.tempFiles {
+		if strings.HasSuffix(elem.Name, fileName) {
+			h.tempFiles[i].Archive = archiveName
+			break
+		}
+	}
 }
 
 func (h *uploadingFileManager) uploadFileSetup(w http.ResponseWriter, r *http.Request) {
@@ -67,26 +110,50 @@ func (h *uploadingFileManager) uploadFile(w http.ResponseWriter, r *http.Request
 		fmt.Fprint(w, "error uploading file")
 		return
 	}
-	localFile.Write(fileBytes)
-	h.tempFiles = append(h.tempFiles, localFile)
+	n, err := localFile.Write(fileBytes)
+	if err != nil {
+		log.Printf("error writing bytes to localfile: %s", err)
+		return
+	}
+	log.Printf("written %d bytes", n)
+	if err := localFile.Sync(); err != nil {
+		log.Printf("error sync written file: %s", err)
+	}
 
-	w.WriteHeader(http.StatusBadRequest)
+	if oldOffset, err := localFile.Seek(0, 1); err != nil {
+		log.Printf("error seeking uploaded file: %s", err)
+		return
+	} else {
+		log.Printf("old offset: %d", oldOffset)
+	}
+
+	if newOffset, err := localFile.Seek(0, 0); err != nil {
+		log.Printf("error seeking uploaded file: %s", err)
+		return
+	} else {
+		log.Printf("new offset: %d", newOffset)
+	}
+
+	h.tempFiles = append(h.tempFiles, myFile{Name: localFile.Name()})
+	log.Printf("uploadFile(w, r): localFile.Name(): %v\n", localFile.Name())
+	log.Printf("h.tempFiles: %v\n", h.tempFiles)
+
+	w.WriteHeader(http.StatusOK)
 	log.Printf("file %s succsesfully uploaded", fileName)
-	fmt.Fprint(w, "file succsesfully uploaded")
-
+	h.ts.ExecuteTemplate(w, "uploadGood.html", fileName)
 }
 
 func newUploadingFileManager(template *template.Template) uploadingFileManager {
 	return uploadingFileManager{
 		ts:        template,
-		tempFiles: []*os.File{},
+		tempFiles: []myFile{},
 	}
 }
 
 func main() {
 	ts, err := template.New("home.html").Funcs(template.FuncMap{
 		"base": filepath.Base,
-	}).ParseFiles("./static/templates/home.html")
+	}).ParseGlob("./static/templates/*.html")
 	if err != nil {
 		log.Println(err.Error())
 		return
@@ -96,6 +163,7 @@ func main() {
 
 	http.HandleFunc("/", uploadingFileHandler.uploadFileSetup)
 	http.HandleFunc("/upload", uploadingFileHandler.uploadFile)
+	http.HandleFunc("/cut", uploadingFileHandler.cutFile)
 	http.ListenAndServe(":8080", nil)
 
 }

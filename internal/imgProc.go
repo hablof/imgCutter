@@ -8,11 +8,51 @@ import (
 	"image/jpeg"
 	_ "image/png"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type SubImager interface {
 	image.Image
 	SubImage(r image.Rectangle) image.Image
+}
+
+func ProcessImage(fileName string, dx int, dy int) (string, error) {
+	origFile, err := os.Open(fileName)
+	if err != nil {
+		log.Printf("error opening file: %v", err)
+		return "", err
+	}
+
+	img, format, err := image.Decode(origFile)
+	if err != nil {
+		log.Printf("error on decode file: %v", err)
+		return "", err
+	}
+	log.Printf("Decoded format is: %s", format)
+
+	name := strings.TrimSuffix(origFile.Name(), filepath.Ext(origFile.Name()))
+
+	archive, err := os.Create(fmt.Sprintf("%s.zip", name))
+	if err != nil {
+		log.Printf("error on create archive file: %v", err)
+		return "", err
+	}
+
+	zipWriter := zip.NewWriter(archive)
+	defer zipWriter.Close()
+
+	images, err := cutImage(img, dx, dy)
+	if err != nil {
+		log.Printf("error on cut img: %v", err)
+		return "", err
+	}
+	if err = packImages(zipWriter, images, origFile.Name()); err != nil {
+		log.Printf("error on create archive file: %v", err)
+		return "", err
+	}
+	return archive.Name(), nil
 }
 
 func castSubImager(img image.Image) (SubImager, error) {
@@ -58,12 +98,13 @@ func castSubImager(img image.Image) (SubImager, error) {
 }
 
 // note: every unit of [][]image.Image shares pixels with img
-func CutImage(img image.Image, pieceWidth int, pieceHeigth int) [][]image.Image {
+func cutImage(img image.Image, pieceWidth int, pieceHeigth int) ([][]image.Image, error) {
 	bankDx := img.Bounds().Dx()
 	bankDy := img.Bounds().Dy()
 	subImager, err := castSubImager(img)
 	if err != nil {
-		log.Fatalf("error on sub imager casting: %v", err)
+		log.Printf("error on sub imager casting: %v", err)
+		return nil, err
 	}
 	log.Printf("dimension banks x: %d, y: %d", bankDx, bankDy)
 
@@ -83,16 +124,17 @@ func CutImage(img image.Image, pieceWidth int, pieceHeigth int) [][]image.Image 
 		}
 		y++
 	}
-	return images
+
+	return images, nil
 }
 
-func PackImages(dest *zip.Writer, images [][]image.Image, namePrefix string) error {
+func packImages(dest *zip.Writer, images [][]image.Image, namePrefix string) error {
 	if namePrefix != "" {
 		namePrefix = namePrefix + "_"
 	}
-	singsX := len(images)/10 + 1
-	singsY := len(images[0])/10 + 1
-	fileNameTemplate := fmt.Sprintf("%%s%%0%ddx%%0%dd.jpeg", singsX, singsY)
+	digitsByX := len(images)/10 + 1
+	digitsByY := len(images[0])/10 + 1
+	fileNameTemplate := fmt.Sprintf("%%s%%0%ddx%%0%dd.jpeg", digitsByX, digitsByY)
 	for x, sliceByX := range images {
 		for y, image := range sliceByX {
 			w, err := dest.Create(fmt.Sprintf(fileNameTemplate, namePrefix, x+1, y+1))
@@ -109,32 +151,6 @@ func PackImages(dest *zip.Writer, images [][]image.Image, namePrefix string) err
 
 		}
 	}
+
 	return nil
 }
-
-// originalImageFileReader, err := os.Open("file.jpg")
-// if err != nil {
-// 	log.Fatalf("error on open file: %v", err)
-// }
-
-// defer originalImageFileReader.Close()
-// i, format, err := image.Decode(originalImageFileReader)
-// if err != nil {
-// 	log.Fatalf("error on decode file: %v", err)
-// }
-// log.Printf("Decoded format is: %s", format)
-
-// archive, err := os.Create("archive.zip")
-// if err != nil {
-// 	log.Fatalf("error on create archive file: %v", err)
-// }
-
-// //Create zip Writer
-// zipWriter := zip.NewWriter(archive)
-// defer zipWriter.Close()
-
-// images := internal.CutImage(i, 100, 100)
-// err = internal.PackImages(zipWriter, images, "puzzle")
-// if err != nil {
-// 	log.Fatalf("error on create archive file: %v", err)
-// }

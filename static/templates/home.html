@@ -1,9 +1,10 @@
 <!DOCTYPE html>
   <head>
-    <title>File Upload</title>
+    <title>НАРЕЗАТОР 3000</title>
   </head>
   <body>
-    <h1>File Upload Page</h1>
+    <marquee direction="right" scrollamount="8">НАРЕЗАТОР 3000</marquee>
+    <h1>Main page</h1>
     <form
       enctype="multipart/form-data"
       action="http://localhost:8080/upload"
@@ -12,7 +13,13 @@
       <input type="file" name="uploadingFile" />
       <input type="submit" value="upload" />
     </form>
+    {{$length := len .}}
+    {{if eq $length 0}}
+    <h4>Нет загруженых файлов</h4>
+    <p><q><i>Чтобы работать с документами онлайн, их надо загрузить.</i></q> ©️ Конфуций, 228г до н.э.</p>
+    {{else}}
     <h3>Загруженные файлы:</h3>
+    {{end}}
     <ul>
       {{range .}}
         <li>{{base .Name}} 
@@ -22,15 +29,23 @@
           method="post"
           >
           <input type="hidden" name="fileName" value={{.Name}} />
-          <input type="number" name="dX"/>
-          <input type="number" name="dY"/> 
+          Ширина: <input type="number" name="dX" placeholder="dX"/>
+          Высота: <input type="number" name="dY" placeholder="dY"/> 
           <input type="submit" value="cut">
         </form>
         {{if ne .Archive  ""}}
-        Download
+        <form 
+          enctype="application/x-www-form-urlencoded"
+          action="http://localhost:8080/download"
+          method="post"
+          >
+          <input type="hidden" name="fileName" value={{.Name}} /> 
+          <input type="submit" value="download">
+        </form>
         {{end}}
       </li>
       {{end}}
     </ul>
+    <marquee direction="right" scrollamount="8">НАРЕЗАТОР 3000</marquee>
   </body>
 </html>

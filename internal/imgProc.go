@@ -19,12 +19,14 @@ type SubImager interface {
 }
 
 func ProcessImage(fileName string, dx int, dy int) (string, error) {
+	// открываем изображение
 	origFile, err := os.Open(fileName)
 	if err != nil {
 		log.Printf("error opening file: %v", err)
 		return "", err
 	}
 
+	// декодируем формат
 	img, format, err := image.Decode(origFile)
 	if err != nil {
 		log.Printf("error on decode file: %v", err)
@@ -32,8 +34,8 @@ func ProcessImage(fileName string, dx int, dy int) (string, error) {
 	}
 	log.Printf("Decoded format is: %s", format)
 
+	// создаём архив
 	name := strings.TrimSuffix(origFile.Name(), filepath.Ext(origFile.Name()))
-
 	archive, err := os.Create(fmt.Sprintf("%s.zip", name))
 	if err != nil {
 		log.Printf("error on create archive file: %v", err)
@@ -43,12 +45,15 @@ func ProcessImage(fileName string, dx int, dy int) (string, error) {
 	zipWriter := zip.NewWriter(archive)
 	defer zipWriter.Close()
 
+	// режем изображение
 	images, err := cutImage(img, dx, dy)
 	if err != nil {
 		log.Printf("error on cut img: %v", err)
 		return "", err
 	}
-	if err = packImages(zipWriter, images, origFile.Name()); err != nil {
+
+	// пакуем в архив
+	if err = packImages(zipWriter, images, filepath.Base(origFile.Name())); err != nil {
 		log.Printf("error on create archive file: %v", err)
 		return "", err
 	}

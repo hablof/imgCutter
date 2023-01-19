@@ -22,12 +22,12 @@ type myFile struct {
 	Archive string
 }
 
-type uploadingFileManager struct {
+type fileManager struct {
 	ts        *template.Template
 	tempFiles []myFile
 }
 
-func (h *uploadingFileManager) cutFile(w http.ResponseWriter, r *http.Request) {
+func (h *fileManager) cutFile(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		log.Printf("err parsing form: %v", err)
 		return
@@ -43,7 +43,7 @@ func (h *uploadingFileManager) cutFile(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error parsing dY: %v", err)
 		return
 	}
-	fmt.Printf("fileName: %v\n, dX: %v\n, dY: %v\n", fileName, dX, dY)
+	log.Printf("fileName: %v, dX: %v, dY: %v", fileName, dX, dY)
 
 	archiveName, err2 := internal.ProcessImage(fileName, dX, dY)
 	if err2 != nil {
@@ -63,7 +63,7 @@ func (h *uploadingFileManager) cutFile(w http.ResponseWriter, r *http.Request) {
 	h.ts.ExecuteTemplate(w, "cutGood.html", fileName)
 }
 
-func (h *uploadingFileManager) uploadFileSetup(w http.ResponseWriter, r *http.Request) {
+func (h *fileManager) uploadFileSetup(w http.ResponseWriter, r *http.Request) {
 	buf := bytes.Buffer{}
 	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.tempFiles); err != nil {
 		log.Println(err.Error())
@@ -75,7 +75,28 @@ func (h *uploadingFileManager) uploadFileSetup(w http.ResponseWriter, r *http.Re
 	w.Write(buf.Bytes())
 }
 
-func (h *uploadingFileManager) uploadFile(w http.ResponseWriter, r *http.Request) {
+func (h *fileManager) downloadFile(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		log.Printf("err parsing form: %v", err)
+		return
+	}
+	fileName := r.PostForm.Get("fileName")
+	log.Printf("downloading archive of: %v", fileName)
+
+	archiveName := ""
+	for i, elem := range h.tempFiles {
+		if strings.HasSuffix(elem.Name, fileName) {
+			archiveName = h.tempFiles[i].Archive
+			break
+		}
+	}
+
+	w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(filepath.Base(archiveName)))
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeFile(w, r, archiveName)
+}
+
+func (h *fileManager) uploadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -140,8 +161,8 @@ func (h *uploadingFileManager) uploadFile(w http.ResponseWriter, r *http.Request
 	h.ts.ExecuteTemplate(w, "uploadGood.html", fileName)
 }
 
-func newUploadingFileManager(template *template.Template) uploadingFileManager {
-	return uploadingFileManager{
+func newFileManager(template *template.Template) fileManager {
+	return fileManager{
 		ts:        template,
 		tempFiles: []myFile{},
 	}
@@ -156,11 +177,13 @@ func main() {
 		return
 	}
 
-	fileManager := newUploadingFileManager(ts)
-
+	fileManager := newFileManager(ts)
+	http.HandleFunc("/download", fileManager.downloadFile)
 	http.HandleFunc("/", fileManager.uploadFileSetup)
 	http.HandleFunc("/upload", fileManager.uploadFile)
 	http.HandleFunc("/cut", fileManager.cutFile)
+	log.Printf("starting server...")
+	log.Printf("please visit localhost:8080")
 	http.ListenAndServe(":8080", nil)
 
 }

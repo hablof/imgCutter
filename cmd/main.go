@@ -57,6 +57,10 @@ func (h *uploadingFileManager) cutFile(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+
+	w.WriteHeader(http.StatusOK)
+	log.Printf("file %s succsesfully cut", fileName)
+	h.ts.ExecuteTemplate(w, "cutGood.html", fileName)
 }
 
 func (h *uploadingFileManager) uploadFileSetup(w http.ResponseWriter, r *http.Request) {
@@ -120,13 +124,6 @@ func (h *uploadingFileManager) uploadFile(w http.ResponseWriter, r *http.Request
 		log.Printf("error sync written file: %s", err)
 	}
 
-	if oldOffset, err := localFile.Seek(0, 1); err != nil {
-		log.Printf("error seeking uploaded file: %s", err)
-		return
-	} else {
-		log.Printf("old offset: %d", oldOffset)
-	}
-
 	if newOffset, err := localFile.Seek(0, 0); err != nil {
 		log.Printf("error seeking uploaded file: %s", err)
 		return
@@ -159,11 +156,11 @@ func main() {
 		return
 	}
 
-	uploadingFileHandler := newUploadingFileManager(ts)
+	fileManager := newUploadingFileManager(ts)
 
-	http.HandleFunc("/", uploadingFileHandler.uploadFileSetup)
-	http.HandleFunc("/upload", uploadingFileHandler.uploadFile)
-	http.HandleFunc("/cut", uploadingFileHandler.cutFile)
+	http.HandleFunc("/", fileManager.uploadFileSetup)
+	http.HandleFunc("/upload", fileManager.uploadFile)
+	http.HandleFunc("/cut", fileManager.cutFile)
 	http.ListenAndServe(":8080", nil)
 
 }

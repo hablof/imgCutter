@@ -18,19 +18,14 @@ var (
 	ErrFS = errors.New("filesystem error")
 )
 
-type fileManager struct {
-	tempFiles map[string]myFile
+type myFile struct {
+	Name     string
+	Archive  string
+	Uploaded time.Time
 }
 
-func (fm *fileManager) setArchivePath(targetFileName string, archiveName string) error {
-	f, ok := fm.tempFiles[targetFileName]
-	if !ok {
-		return errors.New("on such file")
-	}
-	f.Archive = archiveName
-	fm.tempFiles[targetFileName] = f
-
-	return nil
+type fileManager struct {
+	tempFiles map[string]myFile
 }
 
 func (fm *fileManager) GetFiles() []myFile {
@@ -73,7 +68,10 @@ func (fm *fileManager) CutFile(fileName string, dx int, dy int) error {
 		return err
 	}
 
-	fm.setArchivePath(fileName, archiveName)
+	if err := fm.setArchivePath(fileName, archive.Name()); err != nil {
+		log.Printf("error on set archive path: %v", err)
+		return err
+	}
 	return nil
 }
 
@@ -119,6 +117,37 @@ func (fm *fileManager) UploadFile(uploadingFile io.Reader, fileName string) erro
 		Uploaded: time.Now(),
 	}
 	log.Printf("uploaded file: %v\n", localFile.Name())
+	return nil
+}
+
+func (fm *fileManager) GetArchiveName(fileName string) (string, error) {
+	f, ok := fm.tempFiles[fileName]
+	if !ok {
+		return "", errors.New("on such file")
+	}
+
+	if err := fm.checkFileExist(f.Archive); err != nil {
+		return "", err
+	}
+
+	return f.Archive, nil
+}
+
+func (fm *fileManager) setArchivePath(targetFileName string, archiveName string) error {
+	f, ok := fm.tempFiles[targetFileName]
+	if !ok {
+		return errors.New("on such file")
+	}
+	f.Archive = archiveName
+	fm.tempFiles[targetFileName] = f
+
+	return nil
+}
+
+func (fm *fileManager) checkFileExist(fileName string) error {
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return errors.New("on such file")
+	}
 	return nil
 }
 

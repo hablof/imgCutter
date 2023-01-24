@@ -2,19 +2,13 @@ package service
 
 import (
 	"io"
-	"time"
 )
-
-type myFile struct {
-	Name     string
-	Archive  string
-	Uploaded time.Time
-}
 
 type FileService interface {
 	GetFiles() []myFile
 	UploadFile(uploadingFile io.Reader, fileName string) error
 	CutFile(fileName string, dX int, dY int) error
+	GetArchiveName(fileName string) (string, error)
 }
 
 type Service struct {

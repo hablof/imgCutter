@@ -144,6 +144,7 @@ func PackImages(dest *zip.Writer, images [][]image.Image, namePrefix string) err
 	if namePrefix != "" {
 		namePrefix = namePrefix + "_"
 	}
+
 	digitsByX := countDigits(len(images))
 	digitsByY := countDigits(len(images[0]))
 	fileNameTemplate := fmt.Sprintf("%%s%%0%ddx%%0%dd.jpeg", digitsByX, digitsByY) // "%s%0Xdx%0Yd.jpeg", digitsByX = 2, digitsByY = 4 -> "%s%02dx%04d.jpeg"

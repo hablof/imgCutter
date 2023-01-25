@@ -27,7 +27,13 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("fileName: %v, dX: %v, dY: %v", fileName, dX, dY)
 
-	if err := h.service.Files.CutFile(fileName, dX, dY); err != nil {
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	if err := h.service.Files.CutFile(sessionID, fileName, dX, dY); err != nil {
 		log.Printf("error processing img: %v", err)
 		return
 	}
@@ -38,8 +44,14 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
 	buf := bytes.Buffer{}
-	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.service.Files.GetFiles()); err != nil {
+	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.service.Files.GetFiles(sessionID)); err != nil {
 		log.Println(err.Error())
 		log.Print(buf.String())
 		w.WriteHeader(500)
@@ -61,7 +73,13 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	fileName := r.PostForm.Get("fileName")
 	log.Printf("downloading archive of: %v", fileName)
 
-	archiveName, err := h.service.Files.GetArchiveName(fileName)
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	archiveName, err := h.service.Files.GetArchiveName(sessionID, fileName)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -93,7 +111,13 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Files.UploadFile(uploadingFile, fileName); err != nil {
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	if err := h.service.Files.UploadFile(sessionID, uploadingFile, fileName); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

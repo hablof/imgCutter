@@ -11,10 +11,11 @@ type SessionService interface {
 }
 
 type FileService interface {
-	GetFiles() []myFile
-	UploadFile(uploadingFile io.Reader, fileName string) error
-	CutFile(fileName string, dX int, dY int) error
-	GetArchiveName(fileName string) (string, error)
+	GetFiles(sessionID string) []myFile
+	UploadFile(sessionID string, uploadingFile io.Reader, fileName string) error
+	CutFile(sessionID string, fileName string, dX int, dY int) error
+	GetArchiveName(sessionID string, fileName string) (string, error)
+	NewSessionFiles(sessionID string)
 }
 
 type Service struct {
@@ -24,7 +25,7 @@ type Service struct {
 
 func NewService() Service {
 	return Service{
-		Files:   &fileManager{tempFiles: map[string]myFile{}},
+		Files:   &fileManager{sessionFiles: map[string]tempFiles{}},
 		Session: &sessionManager{sessions: map[string]*Session{}},
 	}
 }

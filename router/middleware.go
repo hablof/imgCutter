@@ -10,8 +10,9 @@ import (
 type ctxStr string
 
 const (
-	SessionID  = "SESSID"
-	CookieLife = 300 // in seconds
+	sessionID            = "SESSID"
+	ctxSessionKey ctxStr = "sessionID"
+	cookieLife           = 300 // in seconds
 )
 
 func (h *Handler) Logging(f http.HandlerFunc) http.HandlerFunc {
@@ -25,25 +26,24 @@ func (h *Handler) Logging(f http.HandlerFunc) http.HandlerFunc {
 
 func (h *Handler) ManageSession(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var session string
-
 		session, ok := h.checkSessionCookie(r)
 		if !ok {
 			log.Printf("creating new session")
 			session = h.service.Session.New().String() // side-effect: new session entry in service.Session
+			h.service.Files.NewSessionFiles(session)   // vsrato
 			h.setSessionCookie(session, w)
 		}
 
 		log.Printf("working session: %s", session)
 
 		//помещаем сессию в контекст запроса
-		ctxr := r.WithContext(context.WithValue(context.Background(), ctxStr(SessionID), session))
+		ctxr := r.WithContext(context.WithValue(context.Background(), ctxSessionKey, session))
 		f(w, ctxr)
 	}
 }
 
 func (h *Handler) checkSessionCookie(r *http.Request) (sessionUUID string, ok bool) {
-	sessionCookie, err := r.Cookie(SessionID)
+	sessionCookie, err := r.Cookie(sessionID)
 	//если куки инвалидны -- создаём новую сессию и пишем куки в ответ
 	if err != nil {
 		log.Printf("session cookie not found")
@@ -63,11 +63,11 @@ func (h *Handler) checkSessionCookie(r *http.Request) (sessionUUID string, ok bo
 
 func (*Handler) setSessionCookie(session string, w http.ResponseWriter) {
 	newCookie := http.Cookie{
-		Name:  SessionID,
+		Name:  sessionID,
 		Value: session,
 		Path:  "/",
 
-		MaxAge:   CookieLife, // in seconds
+		MaxAge:   cookieLife, // in seconds
 		Secure:   false,
 		HttpOnly: true,
 	}

@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,19 +25,26 @@ type myFile struct {
 	Uploaded time.Time
 }
 
+type tempFiles map[string]myFile
+
+// struct {
+// 	tempFiles
+// }
+
 type fileManager struct {
-	tempFiles map[string]myFile
+	sessionFiles map[string]tempFiles
 }
 
-func (fm *fileManager) GetFiles() []myFile {
-	output := make([]myFile, 0, len(fm.tempFiles))
-	for _, f := range fm.tempFiles {
+func (fm *fileManager) GetFiles(sessionID string) []myFile {
+	output := make([]myFile, 0, len(fm.sessionFiles[sessionID]))
+	for _, f := range fm.sessionFiles[sessionID] {
 		output = append(output, f)
 	}
+	sort.Slice(output, func(i, j int) bool { return output[i].Uploaded.After(output[j].Uploaded) })
 	return output
 }
 
-func (fm *fileManager) CutFile(fileName string, dx int, dy int) error {
+func (fm *fileManager) CutFile(sessionID string, fileName string, dx int, dy int) error {
 	// открываем изображение
 	img, format, err := internal.OpenImage(fileName)
 	if err != nil {
@@ -68,21 +76,22 @@ func (fm *fileManager) CutFile(fileName string, dx int, dy int) error {
 		return err
 	}
 
-	if err := fm.setArchivePath(fileName, archive.Name()); err != nil {
+	if err := fm.setArchivePath(sessionID, fileName, archive.Name()); err != nil {
 		log.Printf("error on set archive path: %v", err)
 		return err
 	}
 	return nil
 }
 
-func (fm *fileManager) UploadFile(uploadingFile io.Reader, fileName string) error {
+func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fileName string) error {
 	var localFile *os.File
 
-	if err := createDirIfNotExist("temp"); err != nil {
+	if err := createDirIfNotExist(fmt.Sprintf("temp/%s", sessionID)); err != nil {
 		log.Println(err)
 		return ErrFS
 	}
-	localFile, err := os.Create(fmt.Sprintf("temp/%s", fileName))
+
+	localFile, err := os.Create(fmt.Sprintf("temp/%s/%s", sessionID, fileName))
 	if err != nil {
 		log.Printf("error creating file: %s", err)
 		return ErrFS
@@ -111,7 +120,7 @@ func (fm *fileManager) UploadFile(uploadingFile io.Reader, fileName string) erro
 		return ErrFS
 	}
 
-	fm.tempFiles[localFile.Name()] = myFile{
+	fm.sessionFiles[sessionID][localFile.Name()] = myFile{
 		Name:     localFile.Name(),
 		Archive:  "",
 		Uploaded: time.Now(),
@@ -120,8 +129,8 @@ func (fm *fileManager) UploadFile(uploadingFile io.Reader, fileName string) erro
 	return nil
 }
 
-func (fm *fileManager) GetArchiveName(fileName string) (string, error) {
-	f, ok := fm.tempFiles[fileName]
+func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string, error) {
+	f, ok := fm.sessionFiles[sessionID][fileName]
 	if !ok {
 		return "", errors.New("on such file")
 	}
@@ -133,13 +142,17 @@ func (fm *fileManager) GetArchiveName(fileName string) (string, error) {
 	return f.Archive, nil
 }
 
-func (fm *fileManager) setArchivePath(targetFileName string, archiveName string) error {
-	f, ok := fm.tempFiles[targetFileName]
+func (fm *fileManager) NewSessionFiles(sessionID string) {
+	fm.sessionFiles[sessionID] = map[string]myFile{}
+}
+
+func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, archiveName string) error {
+	f, ok := fm.sessionFiles[sessionID][targetFileName]
 	if !ok {
 		return errors.New("on such file")
 	}
 	f.Archive = archiveName
-	fm.tempFiles[targetFileName] = f
+	fm.sessionFiles[sessionID][targetFileName] = f
 
 	return nil
 }

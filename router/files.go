@@ -3,20 +3,13 @@ package router
 import (
 	"bytes"
 	"fmt"
-	"html/template"
-	"imgCutter/service"
 	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
 )
 
-type fileHandler struct {
-	ts      *template.Template
-	service service.Service
-}
-
-func (h *fileHandler) CutFile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		log.Printf("err parsing form: %v", err)
 		return
@@ -34,7 +27,7 @@ func (h *fileHandler) CutFile(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("fileName: %v, dX: %v, dY: %v", fileName, dX, dY)
 
-	if err := h.service.CutFile(fileName, dX, dY); err != nil {
+	if err := h.service.Files.CutFile(fileName, dX, dY); err != nil {
 		log.Printf("error processing img: %v", err)
 		return
 	}
@@ -44,9 +37,9 @@ func (h *fileHandler) CutFile(w http.ResponseWriter, r *http.Request) {
 	h.ts.ExecuteTemplate(w, "cutGood.html", fileName)
 }
 
-func (h *fileHandler) MainPage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	buf := bytes.Buffer{}
-	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.service.GetFiles()); err != nil {
+	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.service.Files.GetFiles()); err != nil {
 		log.Println(err.Error())
 		log.Print(buf.String())
 		w.WriteHeader(500)
@@ -56,7 +49,7 @@ func (h *fileHandler) MainPage(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf.Bytes())
 }
 
-func (h *fileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -68,7 +61,7 @@ func (h *fileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	fileName := r.PostForm.Get("fileName")
 	log.Printf("downloading archive of: %v", fileName)
 
-	archiveName, err := h.service.GetArchiveName(fileName)
+	archiveName, err := h.service.Files.GetArchiveName(fileName)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -79,7 +72,7 @@ func (h *fileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, archiveName)
 }
 
-func (h *fileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -100,7 +93,7 @@ func (h *fileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UploadFile(uploadingFile, fileName); err != nil {
+	if err := h.service.Files.UploadFile(uploadingFile, fileName); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -110,9 +103,9 @@ func (h *fileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	h.ts.ExecuteTemplate(w, "uploadGood.html", fileName)
 }
 
-func newFileHandler(template *template.Template, service service.Service) *fileHandler {
-	return &fileHandler{
-		ts:      template,
-		service: service,
-	}
-}
+// func newFileHandler(template *template.Template, service service.Service) *fileHandler {
+// 	return &fileHandler{
+// 		ts:      template,
+// 		service: service,
+// 	}
+// }

@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -27,17 +29,22 @@ type myFile struct {
 
 type tempFiles map[string]myFile
 
-// struct {
-// 	tempFiles
-// }
+type Session struct {
+	id    uuid.UUID
+	files tempFiles
+}
+
+func (s *Session) String() string {
+	return s.id.String()
+}
 
 type fileManager struct {
-	sessionFiles map[string]tempFiles
+	sessions map[string]*Session
 }
 
 func (fm *fileManager) GetFiles(sessionID string) []myFile {
-	output := make([]myFile, 0, len(fm.sessionFiles[sessionID]))
-	for _, f := range fm.sessionFiles[sessionID] {
+	output := make([]myFile, 0, len(fm.sessions[sessionID].files))
+	for _, f := range fm.sessions[sessionID].files {
 		output = append(output, f)
 	}
 	sort.Slice(output, func(i, j int) bool { return output[i].Uploaded.After(output[j].Uploaded) })
@@ -120,7 +127,7 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 		return ErrFS
 	}
 
-	fm.sessionFiles[sessionID][localFile.Name()] = myFile{
+	fm.sessions[sessionID].files[localFile.Name()] = myFile{
 		Name:     localFile.Name(),
 		Archive:  "",
 		Uploaded: time.Now(),
@@ -130,7 +137,7 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 }
 
 func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string, error) {
-	f, ok := fm.sessionFiles[sessionID][fileName]
+	f, ok := fm.sessions[sessionID].files[fileName]
 	if !ok {
 		return "", errors.New("on such file")
 	}
@@ -142,17 +149,13 @@ func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string
 	return f.Archive, nil
 }
 
-func (fm *fileManager) NewSessionFiles(sessionID string) {
-	fm.sessionFiles[sessionID] = map[string]myFile{}
-}
-
 func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, archiveName string) error {
-	f, ok := fm.sessionFiles[sessionID][targetFileName]
+	f, ok := fm.sessions[sessionID].files[targetFileName]
 	if !ok {
 		return errors.New("on such file")
 	}
 	f.Archive = archiveName
-	fm.sessionFiles[sessionID][targetFileName] = f
+	fm.sessions[sessionID].files[targetFileName] = f
 
 	return nil
 }

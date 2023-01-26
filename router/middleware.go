@@ -30,7 +30,6 @@ func (h *Handler) ManageSession(f http.HandlerFunc) http.HandlerFunc {
 		if !ok {
 			log.Printf("creating new session")
 			session = h.service.Session.New().String() // side-effect: new session entry in service.Session
-			h.service.Files.NewSessionFiles(session)   // vsrato
 			h.setSessionCookie(session, w)
 		}
 

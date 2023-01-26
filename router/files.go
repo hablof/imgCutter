@@ -25,7 +25,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 		log.Printf("error parsing dY: %v", err)
 		return
 	}
-	log.Printf("fileName: %v, dX: %v, dY: %v", fileName, dX, dY)
+	log.Printf("cutting file: %v, dX: %v px, dY: %v px", filepath.Base(fileName), dX, dY)
 
 	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
 	if !ok {
@@ -39,7 +39,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	log.Printf("file %s succsesfully cut", fileName)
+	log.Printf("file %s succsesfully cut", filepath.Base(fileName))
 	h.ts.ExecuteTemplate(w, "cutGood.html", fileName)
 }
 

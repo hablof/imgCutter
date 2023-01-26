@@ -4,7 +4,7 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
-	"imgCutter/internal"
+	"imgCutter/imgProcessing"
 	"io"
 	"io/fs"
 	"log"
@@ -22,9 +22,9 @@ var (
 )
 
 type myFile struct {
-	Name     string
-	Archive  string
-	Uploaded time.Time
+	name     string
+	archive  string
+	uploaded time.Time
 }
 
 type tempFiles map[string]myFile
@@ -47,13 +47,13 @@ func (fm *fileManager) GetFiles(sessionID string) []myFile {
 	for _, f := range fm.sessions[sessionID].files {
 		output = append(output, f)
 	}
-	sort.Slice(output, func(i, j int) bool { return output[i].Uploaded.After(output[j].Uploaded) })
+	sort.Slice(output, func(i, j int) bool { return output[i].uploaded.After(output[j].uploaded) })
 	return output
 }
 
 func (fm *fileManager) CutFile(sessionID string, fileName string, dx int, dy int) error {
 	// открываем изображение
-	img, format, err := internal.OpenImage(fileName)
+	img, format, err := imgProcessing.OpenImage(fileName)
 	if err != nil {
 		return err
 	}
@@ -71,18 +71,19 @@ func (fm *fileManager) CutFile(sessionID string, fileName string, dx int, dy int
 	defer zipWriter.Close()
 
 	// режем изображение
-	images, err := internal.CutImage(img, dx, dy)
+	images, err := imgProcessing.CutImage(img, dx, dy)
 	if err != nil {
 		log.Printf("error on cut img: %v", err)
 		return err
 	}
 
 	// пакуем в архив
-	if err := internal.PackImages(zipWriter, images, filepath.Base(archiveName)); err != nil {
+	if err := imgProcessing.PackImages(zipWriter, images, filepath.Base(archiveName)); err != nil {
 		log.Printf("error on create archive file: %v", err)
 		return err
 	}
 
+	// записываем путь архива в myFile
 	if err := fm.setArchivePath(sessionID, fileName, archive.Name()); err != nil {
 		log.Printf("error on set archive path: %v", err)
 		return err
@@ -128,9 +129,9 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 	}
 
 	fm.sessions[sessionID].files[localFile.Name()] = myFile{
-		Name:     localFile.Name(),
-		Archive:  "",
-		Uploaded: time.Now(),
+		name:     localFile.Name(),
+		archive:  "",
+		uploaded: time.Now(),
 	}
 	log.Printf("uploaded file: %v\n", localFile.Name())
 	return nil
@@ -142,11 +143,11 @@ func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string
 		return "", errors.New("on such file")
 	}
 
-	if err := fm.checkFileExist(f.Archive); err != nil {
+	if err := fm.checkFileExist(f.archive); err != nil {
 		return "", err
 	}
 
-	return f.Archive, nil
+	return f.archive, nil
 }
 
 func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, archiveName string) error {
@@ -154,7 +155,7 @@ func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, a
 	if !ok {
 		return errors.New("on such file")
 	}
-	f.Archive = archiveName
+	f.archive = archiveName
 	fm.sessions[sessionID].files[targetFileName] = f
 
 	return nil

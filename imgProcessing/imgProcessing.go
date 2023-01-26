@@ -1,4 +1,4 @@
-package internal
+package imgProcessing
 
 import (
 	"archive/zip"

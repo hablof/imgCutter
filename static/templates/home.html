@@ -28,24 +28,35 @@
     {{end}}
     <ul>
       {{range .}}
-        <li>{{base .Name}} 
+        <li>{{base .OriginalFile}} 
+          <!-- формочка для нарезки -->
           <form 
           enctype="application/x-www-form-urlencoded"
           action="http://localhost:8080/cut"
           method="post"
           >
-          <input type="hidden" name="fileName" value={{.Name}} />
+          <input type="hidden" name="fileName" value={{.OriginalFile}} />
           Ширина: <input type="number" name="dX" placeholder="dX"/>
           Высота: <input type="number" name="dY" placeholder="dY"/> 
           <input type="submit" value="cut">
         </form>
+        <!-- формочка для удаления -->
+        <form 
+        enctype="application/x-www-form-urlencoded"
+        action="http://localhost:8080/delete"
+        method="post"
+        >
+        <input type="hidden" name="fileName" value={{.OriginalFile}} />
+        <input type="submit" value="delete">
+      </form>
         {{if ne .Archive  ""}}
+        <!-- формочка для скачивания -->
         <form 
           enctype="application/x-www-form-urlencoded"
           action="http://localhost:8080/download"
           method="post"
           >
-          <input type="hidden" name="fileName" value={{.Name}} /> 
+          <input type="hidden" name="fileName" value={{.OriginalFile}} /> 
           <input type="submit" value="download">
         </form>
         {{end}}

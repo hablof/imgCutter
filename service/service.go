@@ -15,6 +15,7 @@ type FileService interface {
 	GetFiles(sessionID string) []myFile
 	UploadFile(sessionID string, uploadingFile io.Reader, fileName string) error
 	CutFile(sessionID string, fileName string, dX int, dY int) error
+	DeleteFile(sessionID string, fileName string) error
 	GetArchiveName(sessionID string, fileName string) (string, error)
 }
 

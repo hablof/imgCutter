@@ -31,6 +31,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	if err := h.service.Files.CutFile(sessionID, fileName, dX, dY); err != nil {
@@ -48,6 +49,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	buf := bytes.Buffer{}
@@ -77,6 +79,7 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	archiveName, err := h.service.Files.GetArchiveName(sessionID, fileName)
@@ -115,6 +118,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	if err := h.service.Files.UploadFile(sessionID, uploadingFile, fileName); err != nil {
@@ -125,6 +129,36 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	log.Printf("file %s succsesfully uploaded", fileName)
 	h.ts.ExecuteTemplate(w, "uploadGood.html", fileName)
+}
+
+func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		log.Printf("err parsing form: %v", err)
+		return
+	}
+	fileName := r.PostForm.Get("fileName")
+
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.service.Files.DeleteFile(sessionID, fileName); err != nil {
+		log.Printf("unable to delete files")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	log.Printf("file %s succsesfully deleted", fileName)
+	h.ts.ExecuteTemplate(w, "deleteGood.html", fileName)
 }
 
 // func newFileHandler(template *template.Template, service service.Service) *fileHandler {

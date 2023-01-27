@@ -30,6 +30,7 @@ func (h *Handler) GetHTTPHandler() http.Handler {
 	mux.HandleFunc("/", h.MainPage)
 	mux.HandleFunc("/cut", h.CutFile)
 	mux.HandleFunc("/download", h.DownloadFile)
+	mux.HandleFunc("/delete", h.DeleteFile)
 	mux.HandleFunc("/favicon.ico", h.favicon)
 	mux.HandleFunc("/terminate", h.TerminateSession)
 	mux.HandleFunc("/upload", h.UploadFile)

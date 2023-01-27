@@ -23,8 +23,8 @@ var (
 
 type myFile struct {
 
-	// Full-Name like path/Name.ext
-	Name string // export to templates
+	// Full-OriginalFile like path/OriginalFile.ext
+	OriginalFile string // export to templates
 
 	// Full-Name like path/Name.ext
 	Archive string // export to templates
@@ -40,12 +40,10 @@ func (tf tempFiles) deleteFile(fileName string) error {
 	if !ok {
 		return errors.New("on such file")
 	}
-	log.Printf("removing: %s", f.Name)
-	if err := os.Remove(f.Name); err != nil {
+	if err := deleteFileIfExist(f.OriginalFile); err != nil {
 		return err
 	}
-	log.Printf("removing: %s", f.Archive)
-	if err := os.Remove(f.Archive); err != nil {
+	if err := deleteFileIfExist(f.Archive); err != nil {
 		return err
 	}
 	delete(tf, fileName)
@@ -154,9 +152,9 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 	}
 
 	fm.sessions[sessionID].files[localFile.Name()] = myFile{
-		Name:     localFile.Name(),
-		Archive:  "",
-		uploaded: time.Now(),
+		OriginalFile: localFile.Name(),
+		Archive:      "",
+		uploaded:     time.Now(),
 	}
 	log.Printf("uploaded file: %v\n", localFile.Name())
 	return nil
@@ -168,11 +166,20 @@ func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string
 		return "", errors.New("on such file")
 	}
 
-	if err := fm.checkFileExist(f.Archive); err != nil {
+	if err := checkFileExist(f.Archive); err != nil {
 		return "", err
 	}
 
 	return f.Archive, nil
+}
+
+func (fm *fileManager) DeleteFile(sessionID string, fileName string) error {
+
+	if err := fm.sessions[sessionID].files.deleteFile(fileName); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, archiveName string) error {
@@ -186,7 +193,7 @@ func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, a
 	return nil
 }
 
-func (fm *fileManager) checkFileExist(fileName string) error {
+func checkFileExist(fileName string) error {
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
 		return errors.New("on such file")
 	}
@@ -200,5 +207,18 @@ func createDirIfNotExist(dir string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func deleteFileIfExist(fileName string) error {
+	if err := checkFileExist(fileName); err != nil { // err может быть либо "nil" либо "errors.New("on such file")"
+		return nil
+	}
+
+	// удвляем те файлы, которые существуют
+	if err := os.Remove(fileName); err != nil {
+		return err
+	}
+
 	return nil
 }

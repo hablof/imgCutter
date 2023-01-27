@@ -12,8 +12,9 @@ type ctxStr string
 const (
 	sessionID            = "SESSID"
 	ctxSessionKey ctxStr = "sessionID"
-	cookieLife           = 300 // in seconds
 )
+
+var cookieLife = 0 //int(service.SessionLifetime.Seconds()) // nanoseconds to seconds
 
 func (h *Handler) Logging(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -28,11 +29,11 @@ func (h *Handler) ManageSession(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, ok := h.checkSessionCookie(r)
 		if !ok {
-			log.Printf("creating new session")
 			session = h.service.Session.New().String() // side-effect: new session entry in service.Session
-			h.setSessionCookie(session, w)
 		}
 
+		h.setSessionCookie(session, w)
+		h.service.Session.ResetTimer(session)
 		log.Printf("working session: %s", session)
 
 		//помещаем сессию в контекст запроса

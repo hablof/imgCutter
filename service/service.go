@@ -9,6 +9,7 @@ type SessionService interface {
 	New() *Session
 	GetAll() []string //debug
 	TerminateSession(sessionID string) error
+	ResetTimer(sessionID string)
 }
 
 type FileService interface {

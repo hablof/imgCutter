@@ -51,8 +51,11 @@ func (tf tempFiles) deleteFile(fileName string) error {
 }
 
 type Session struct {
-	id    uuid.UUID
-	files tempFiles
+	id               uuid.UUID
+	files            tempFiles
+	terminatnonTimer time.Timer
+	terminateChannel chan (struct{})
+	resetChannel     chan (struct{})
 }
 
 func (s *Session) String() string {

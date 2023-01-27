@@ -22,12 +22,35 @@ var (
 )
 
 type myFile struct {
-	name     string
-	archive  string
+
+	// Full-Name like path/Name.ext
+	Name string // export to templates
+
+	// Full-Name like path/Name.ext
+	Archive string // export to templates
+
 	uploaded time.Time
 }
 
+// key type is Full-Name like path/Name.ext
 type tempFiles map[string]myFile
+
+func (tf tempFiles) deleteFile(fileName string) error {
+	f, ok := tf[fileName]
+	if !ok {
+		return errors.New("on such file")
+	}
+	log.Printf("removing: %s", f.Name)
+	if err := os.Remove(f.Name); err != nil {
+		return err
+	}
+	log.Printf("removing: %s", f.Archive)
+	if err := os.Remove(f.Archive); err != nil {
+		return err
+	}
+	delete(tf, fileName)
+	return nil
+}
 
 type Session struct {
 	id    uuid.UUID
@@ -60,12 +83,14 @@ func (fm *fileManager) CutFile(sessionID string, fileName string, dx int, dy int
 	log.Printf("Decoded format is: %s", format)
 
 	// создаём архив
+	// archiveName = path + name
 	archiveName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	archive, err := os.Create(fmt.Sprintf("%s.zip", archiveName))
 	if err != nil {
 		log.Printf("error on create archive file: %v", err)
 		return err
 	}
+	defer archive.Close()
 
 	zipWriter := zip.NewWriter(archive)
 	defer zipWriter.Close()
@@ -129,8 +154,8 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 	}
 
 	fm.sessions[sessionID].files[localFile.Name()] = myFile{
-		name:     localFile.Name(),
-		archive:  "",
+		Name:     localFile.Name(),
+		Archive:  "",
 		uploaded: time.Now(),
 	}
 	log.Printf("uploaded file: %v\n", localFile.Name())
@@ -143,11 +168,11 @@ func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string
 		return "", errors.New("on such file")
 	}
 
-	if err := fm.checkFileExist(f.archive); err != nil {
+	if err := fm.checkFileExist(f.Archive); err != nil {
 		return "", err
 	}
 
-	return f.archive, nil
+	return f.Archive, nil
 }
 
 func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, archiveName string) error {
@@ -155,7 +180,7 @@ func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, a
 	if !ok {
 		return errors.New("on such file")
 	}
-	f.archive = archiveName
+	f.Archive = archiveName
 	fm.sessions[sessionID].files[targetFileName] = f
 
 	return nil
@@ -170,7 +195,7 @@ func (fm *fileManager) checkFileExist(fileName string) error {
 
 func createDirIfNotExist(dir string) error {
 	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
-		err := os.Mkdir(dir, os.ModePerm)
+		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			return err
 		}

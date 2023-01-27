@@ -27,11 +27,12 @@ func NewRouter(s service.Service) (*Handler, error) {
 
 func (h *Handler) GetHTTPHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/download", h.DownloadFile)
 	mux.HandleFunc("/", h.MainPage)
-	mux.HandleFunc("/upload", h.UploadFile)
 	mux.HandleFunc("/cut", h.CutFile)
+	mux.HandleFunc("/download", h.DownloadFile)
 	mux.HandleFunc("/favicon.ico", h.favicon)
+	mux.HandleFunc("/terminate", h.TerminateSession)
+	mux.HandleFunc("/upload", h.UploadFile)
 	handler := h.Logging(h.ManageSession(mux.ServeHTTP))
 	return handler
 }

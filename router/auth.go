@@ -1,10 +1,19 @@
 package router
 
-func (r *Handler) GetNewSessionUUID() string {
-	return r.service.Session.New().String()
-}
+import (
+	"log"
+	"net/http"
+)
 
-func (r *Handler) AuthSession(id string) bool {
-	_, ok := r.service.Session.Find(id)
-	return ok
+func (h *Handler) TerminateSession(w http.ResponseWriter, r *http.Request) {
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	if err := h.service.Session.TerminateSession(sessionID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	h.ts.ExecuteTemplate(w, "terminateGood.html", nil)
 }

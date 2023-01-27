@@ -8,6 +8,7 @@ type SessionService interface {
 	Find(id string) (ses *Session, ok bool)
 	New() *Session
 	GetAll() []string //debug
+	TerminateSession(sessionID string) error
 }
 
 type FileService interface {

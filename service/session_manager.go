@@ -3,11 +3,14 @@ package service
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrSessionNotFound = errors.New("session not found")
 )
 
 func (fm *fileManager) Find(id string) (ses *Session, ok bool) {
@@ -45,12 +48,11 @@ func (fm *fileManager) New() *Session {
 func (fm *fileManager) TerminateSession(sessionID string) error {
 	_, ok := fm.Find(sessionID)
 	if !ok {
-		return errors.New("session not found")
+		return ErrSessionNotFound
 	}
 
 	if err := os.RemoveAll(fmt.Sprintf("temp/%s", sessionID)); err != nil {
-		log.Printf("unable to remove session files: %v", err)
-		return err
+		return fmt.Errorf("unable to remove session files: %w", err)
 	}
 
 	fm.sessionsMapMutex.Lock()

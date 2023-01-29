@@ -19,7 +19,11 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrFS = errors.New("filesystem error")
+var (
+	ErrFileNotFound = errors.New("file not found")
+	ErrFS           = errors.New("filesystem error")
+	ErrNilSession   = errors.New("nil session")
+)
 
 type myFile struct {
 	// Full-OriginalFile like path/OriginalFile.ext
@@ -37,7 +41,7 @@ type tempFiles map[string]myFile
 func (tf tempFiles) deleteFile(fileName string) error {
 	file, ok := tf[fileName]
 	if !ok {
-		return errors.New("on such file")
+		return ErrFileNotFound
 	}
 
 	if err := deleteFileIfExist(file.OriginalFile); err != nil {
@@ -71,7 +75,7 @@ type fileManager struct {
 
 func (fm *fileManager) GetFiles(s *Session) ([]myFile, error) {
 	if s == nil {
-		return nil, errors.New("nil session")
+		return nil, ErrNilSession
 	}
 
 	output := make([]myFile, 0, len(s.files))
@@ -86,7 +90,7 @@ func (fm *fileManager) GetFiles(s *Session) ([]myFile, error) {
 
 func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) error {
 	if s == nil {
-		return errors.New("nil session")
+		return ErrNilSession
 	}
 
 	// дальше функция состоит почти полностью из работы с файлами
@@ -96,19 +100,21 @@ func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) erro
 	// открываем изображение
 	img, format, err := imgprocessing.OpenImage(fileName)
 	if err != nil {
-		return err
+		return fmt.Errorf("error processing image: %w", err)
 	}
 
 	log.Printf("Decoded format is: %s", format)
 
 	// создаём архив
-	// archiveName = path + name
+	// archiveName = path + name, без расширениея
 	archiveName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	archive, err := os.Create(fmt.Sprintf("%s.zip", archiveName))
 
 	if err != nil {
-		log.Printf("error on create archive file: %v", err)
-		return err
+		e := fmt.Errorf("error on create archive file: %w", err)
+		log.Println(e)
+
+		return e
 	}
 	defer archive.Close()
 
@@ -118,20 +124,23 @@ func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) erro
 	// режем изображение
 	images, err := imgprocessing.CutImage(img, dx, dy)
 	if err != nil {
-		log.Printf("error on cut img: %v", err)
-		return err
+		e := fmt.Errorf("error on cut img: %w", err)
+		log.Println(e)
+		return e
 	}
 
 	// пакуем в архив
 	if err := imgprocessing.PackImages(zipWriter, images, filepath.Base(archiveName)); err != nil {
-		log.Printf("error on create archive file: %v", err)
-		return err
+		e := fmt.Errorf("error on create archive file: %w", err)
+		log.Println(e)
+		return e
 	}
 
 	// записываем путь архива в myFile
 	if err := fm.setArchivePath(s, fileName, archive.Name()); err != nil {
-		log.Printf("error on set archive path: %v", err)
-		return err
+		e := fmt.Errorf("error on set archive path: %w", err)
+		log.Println(e)
+		return e
 	}
 
 	return nil
@@ -139,7 +148,7 @@ func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) erro
 
 func (fm *fileManager) UploadFile(session *Session, uploadingFile io.Reader, fileName string) error {
 	if session == nil {
-		return errors.New("nil session")
+		return ErrNilSession
 	}
 
 	session.fileMutex.Lock()
@@ -196,12 +205,12 @@ func (fm *fileManager) UploadFile(session *Session, uploadingFile io.Reader, fil
 
 func (fm *fileManager) GetArchiveName(s *Session, fileName string) (string, error) {
 	if s == nil {
-		return "", errors.New("nil session")
+		return "", ErrNilSession
 	}
 
 	f, ok := s.files[fileName]
 	if !ok {
-		return "", errors.New("on such file")
+		return "", ErrFileNotFound
 	}
 
 	if err := checkFileExist(f.Archive); err != nil {
@@ -213,7 +222,7 @@ func (fm *fileManager) GetArchiveName(s *Session, fileName string) (string, erro
 
 func (fm *fileManager) DeleteFile(session *Session, fileName string) error {
 	if session == nil {
-		return errors.New("nil session")
+		return ErrNilSession
 	}
 
 	session.fileMutex.Lock()
@@ -228,12 +237,12 @@ func (fm *fileManager) DeleteFile(session *Session, fileName string) error {
 
 func (fm *fileManager) setArchivePath(s *Session, targetFileName string, archiveName string) error {
 	if s == nil {
-		return errors.New("nil session")
+		return ErrNilSession
 	}
 
 	file, ok := s.files[targetFileName]
 	if !ok {
-		return errors.New("on such file")
+		return ErrFileNotFound
 	}
 
 	file.Archive = archiveName
@@ -244,7 +253,7 @@ func (fm *fileManager) setArchivePath(s *Session, targetFileName string, archive
 
 func checkFileExist(fileName string) error {
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
-		return errors.New("on such file")
+		return ErrFileNotFound
 	}
 
 	return nil
@@ -254,7 +263,7 @@ func createDirIfNotExist(dir string) error {
 	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
 		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to mkdir: %w", err)
 		}
 	}
 
@@ -262,13 +271,14 @@ func createDirIfNotExist(dir string) error {
 }
 
 func deleteFileIfExist(fileName string) error {
-	if err := checkFileExist(fileName); err != nil { // err может быть либо "nil" либо "errors.New("on such file")"
+	// err может быть либо "nil" либо "ErrFileNotFound"
+	if err := checkFileExist(fileName); errors.Is(err, ErrFileNotFound) {
 		return nil
 	}
 
 	// удвляем те файлы, которые существуют
 	if err := os.Remove(fileName); err != nil {
-		return err
+		return fmt.Errorf("unable to remove: %w", err)
 	}
 
 	return nil

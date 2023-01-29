@@ -11,6 +11,11 @@ import (
 	"os"
 )
 
+var (
+	ErrUnknownFormat = errors.New("unknown format")
+	ErrSmallCut      = errors.New("cut too small")
+)
+
 type subImager interface {
 	image.Image
 	SubImage(r image.Rectangle) image.Image
@@ -52,14 +57,18 @@ type subImager interface {
 func OpenImage(fileName string) (img image.Image, imgFormat string, err error) {
 	origFile, err := os.Open(fileName)
 	if err != nil {
-		log.Printf("error opening file: %v", err)
-		return nil, "", err
+		e := fmt.Errorf("error opening file: %w", err)
+		log.Println(e)
+
+		return nil, "", e
 	}
 
 	img, imgFormat, err = image.Decode(origFile)
 	if err != nil {
-		log.Printf("error on decode file: %v", err)
-		return nil, "", err
+		e := fmt.Errorf("error on decode file: %w", err)
+		log.Println(e)
+
+		return nil, "", e
 	}
 
 	return img, imgFormat, nil
@@ -105,13 +114,13 @@ func castSubImager(img image.Image) (subImager, error) {
 		return image, nil
 	}
 
-	return image.NewAlpha(img.Bounds()), errors.New("unknown format")
+	return image.NewAlpha(img.Bounds()), ErrUnknownFormat
 }
 
 // note: every unit of [][]image.Image shares pixels with img
 func CutImage(img image.Image, pieceWidth int, pieceHeigth int) ([][]image.Image, error) {
 	if pieceWidth < 32 || pieceHeigth < 32 {
-		return nil, errors.New("cut too small")
+		return nil, ErrSmallCut
 	}
 
 	bankDx := img.Bounds().Dx()
@@ -157,11 +166,11 @@ func PackImages(dest *zip.Writer, images [][]image.Image, namePrefix string) err
 		for y, image := range sliceByX {
 			w, err := dest.Create(fmt.Sprintf(fileNameTemplate, namePrefix, x+1, y+1))
 			if err != nil {
-				return err
+				return fmt.Errorf("unable write zip archive: %w", err)
 			}
 
 			if err := jpeg.Encode(w, image, &options); err != nil {
-				return err
+				return fmt.Errorf("unable write zip archive: %w", err)
 			}
 		}
 	}

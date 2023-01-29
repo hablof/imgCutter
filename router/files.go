@@ -183,6 +183,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		log.Printf("err parsing form: %v", err)
 		return
 	}
+
 	fileName := r.PostForm.Get("fileName")
 
 	sessionID, ok := r.Context().Value(ctxSessionKey).(string)

@@ -12,7 +12,7 @@ type ctxStr string
 const (
 	sessionID            = "SESSID"
 	ctxSessionKey ctxStr = "sessionID"
-	cookieLife           = 300 // in seconds
+	cookieLife           = 0 // in seconds
 )
 
 func (h *Handler) Logging(f http.HandlerFunc) http.HandlerFunc {
@@ -60,7 +60,7 @@ func (h *Handler) checkSessionCookie(r *http.Request) (sessionUUID string, ok bo
 	return session, true
 }
 
-func (*Handler) setSessionCookie(session string, w http.ResponseWriter) {
+func (h *Handler) setSessionCookie(session string, w http.ResponseWriter) {
 	newCookie := http.Cookie{
 		Name:     sessionID,
 		Value:    session,

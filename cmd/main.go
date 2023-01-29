@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"imgcutter/router"
 	"imgcutter/service"
@@ -19,6 +20,16 @@ func main() {
 		return
 	}
 
+	server := http.Server{
+		Addr:         ":8080",
+		Handler:      r.GetHTTPHandler(),
+		ReadTimeout:  time.Minute,
+		WriteTimeout: time.Minute,
+	}
+
 	log.Printf("starting server...")
-	_ = http.ListenAndServe(":8080", r.GetHTTPHandler())
+
+	if err := server.ListenAndServe(); err != nil {
+		log.Println(err)
+	}
 }

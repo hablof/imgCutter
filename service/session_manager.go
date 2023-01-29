@@ -45,20 +45,27 @@ func (fm *fileManager) New() *Session {
 	return &session
 }
 
-func (fm *fileManager) TerminateSession(sessionID string) error {
-	_, ok := fm.Find(sessionID)
-	if !ok {
-		return ErrSessionNotFound
+func (fm *fileManager) TerminateSession(session *Session) error {
+	if session == nil {
+		return ErrNilSession
 	}
 
-	if err := os.RemoveAll(fmt.Sprintf("temp/%s", sessionID)); err != nil {
+	if err := os.RemoveAll(fmt.Sprintf("temp/%s", session.String())); err != nil {
 		return fmt.Errorf("unable to remove session files: %w", err)
 	}
 
 	fm.sessionsMapMutex.Lock()
 	defer fm.sessionsMapMutex.Unlock()
 
-	delete(fm.sessions, sessionID)
+	delete(fm.sessions, session.String())
+
+	return nil
+}
+
+func (fm *fileManager) RemoveAll() error {
+	if err := os.RemoveAll("temp"); err != nil {
+		return fmt.Errorf("unable to remove temp files: %w", err)
+	}
 
 	return nil
 }

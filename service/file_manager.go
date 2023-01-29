@@ -203,12 +203,12 @@ func (fm *fileManager) UploadFile(session *Session, uploadingFile io.Reader, fil
 	return nil
 }
 
-func (fm *fileManager) GetArchiveName(s *Session, fileName string) (string, error) {
-	if s == nil {
+func (fm *fileManager) GetArchiveName(session *Session, fileName string) (string, error) {
+	if session == nil {
 		return "", ErrNilSession
 	}
 
-	f, ok := s.files[fileName]
+	f, ok := session.files[fileName]
 	if !ok {
 		return "", ErrFileNotFound
 	}

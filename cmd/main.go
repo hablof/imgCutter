@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"imgcutter/router"
@@ -13,10 +17,10 @@ import (
 )
 
 func main() {
-	s := service.NewService()
-	r, err := router.NewRouter(s)
+	services := service.NewService()
+	r, err := router.NewRouter(services)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 		return
 	}
 
@@ -29,7 +33,23 @@ func main() {
 
 	log.Printf("starting server...")
 
-	if err := server.ListenAndServe(); err != nil {
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	<-quit
+
+	log.Println("shutting down server")
+
+	if err := server.Shutdown(context.Background()); err != nil {
+		log.Println(err)
+	}
+
+	if err := services.Session.RemoveAll(); err != nil {
 		log.Println(err)
 	}
 }

@@ -8,8 +8,9 @@ import (
 type SessionService interface {
 	Find(id string) (s *Session, ok bool)
 	New() *Session
-	GetAll() []string // debug
-	TerminateSession(sessionID string) error
+	// GetAll() []string // debug
+	RemoveAll() error
+	TerminateSession(session *Session) error
 }
 
 type FileService interface {

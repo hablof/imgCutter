@@ -63,6 +63,8 @@ func OpenImage(fileName string) (img image.Image, imgFormat string, err error) {
 		return nil, "", e
 	}
 
+	defer origFile.Close()
+
 	img, imgFormat, err = image.Decode(origFile)
 	if err != nil {
 		e := fmt.Errorf("error on decode file: %w", err)

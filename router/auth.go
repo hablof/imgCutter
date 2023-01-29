@@ -11,9 +11,11 @@ func (h *Handler) TerminateSession(w http.ResponseWriter, r *http.Request) {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+
 	if err := h.service.Session.TerminateSession(sessionID); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	h.ts.ExecuteTemplate(w, "terminateGood.html", nil)
+
+	_ = h.templates.ExecuteTemplate(w, "terminateGood.html", nil)
 }

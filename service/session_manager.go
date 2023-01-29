@@ -15,26 +15,31 @@ func (fm *fileManager) Find(id string) (ses *Session, ok bool) {
 	if err != nil {
 		return nil, false
 	}
+
 	ses, ok = fm.sessions[id]
+
 	return ses, ok
 }
 
 func (fm *fileManager) New() *Session {
-	var ses Session
+	var session Session
+
 	for {
-		ses = Session{
+		session = Session{
 			id:        uuid.New(),
 			fileMutex: sync.Mutex{},
 			files:     map[string]myFile{},
 		}
-		if _, ok := fm.sessions[ses.id.String()]; !ok {
+		if _, ok := fm.sessions[session.id.String()]; !ok {
 			break
 		}
 	}
+
 	fm.sessionsMapMutex.Lock()
-	fm.sessions[ses.id.String()] = &ses
+	fm.sessions[session.id.String()] = &session
 	fm.sessionsMapMutex.Unlock()
-	return &ses
+
+	return &session
 }
 
 func (fm *fileManager) TerminateSession(sessionID string) error {
@@ -42,13 +47,17 @@ func (fm *fileManager) TerminateSession(sessionID string) error {
 	if !ok {
 		return errors.New("session not found")
 	}
+
 	if err := os.RemoveAll(fmt.Sprintf("temp/%s", sessionID)); err != nil {
 		log.Printf("unable to remove session files: %v", err)
 		return err
 	}
+
 	fm.sessionsMapMutex.Lock()
+	defer fm.sessionsMapMutex.Unlock()
+
 	delete(fm.sessions, sessionID)
-	fm.sessionsMapMutex.Unlock()
+
 	return nil
 }
 
@@ -57,5 +66,6 @@ func (fm *fileManager) GetAll() []string {
 	for _, v := range fm.sessions {
 		out = append(out, v.String())
 	}
+
 	return out
 }

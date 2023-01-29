@@ -8,7 +8,7 @@ import (
 type SessionService interface {
 	Find(id string) (s *Session, ok bool)
 	New() *Session
-	GetAll() []string //debug
+	GetAll() []string // debug
 	TerminateSession(sessionID string) error
 }
 
@@ -30,6 +30,7 @@ func NewService() Service {
 		sessionsMapMutex: sync.Mutex{},
 		sessions:         map[string]*Session{},
 	}
+
 	return Service{
 		Files:   mem,
 		Session: mem,

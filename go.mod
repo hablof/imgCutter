@@ -1,4 +1,4 @@
-module imgCutter
+module imgcutter
 
 go 1.19
 

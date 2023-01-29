@@ -2,26 +2,27 @@ package router
 
 import (
 	"html/template"
-	"imgCutter/service"
 	"net/http"
 	"path/filepath"
+
+	"imgcutter/service"
 )
 
 type Handler struct {
-	ts      *template.Template
-	service service.Service
+	templates *template.Template
+	service   service.Service
 }
 
 func NewRouter(s service.Service) (*Handler, error) {
-	ts, err := template.New("home.html").Funcs(template.FuncMap{
+	templates, err := template.New("home.html").Funcs(template.FuncMap{
 		"base": filepath.Base,
 	}).ParseGlob("static/templates/*.html")
 	if err != nil {
 		return nil, err
 	}
 	return &Handler{
-		ts:      ts,
-		service: s,
+		templates: templates,
+		service:   s,
 	}, nil
 }
 

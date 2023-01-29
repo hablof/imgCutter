@@ -1,10 +1,11 @@
 package main
 
 import (
-	"imgCutter/router"
-	"imgCutter/service"
 	"log"
 	"net/http"
+
+	"imgcutter/router"
+	"imgcutter/service"
 
 	_ "image/jpeg"
 	_ "image/png"
@@ -19,5 +20,5 @@ func main() {
 	}
 
 	log.Printf("starting server...")
-	http.ListenAndServe(":8080", r.GetHTTPHandler())
+	_ = http.ListenAndServe(":8080", r.GetHTTPHandler())
 }

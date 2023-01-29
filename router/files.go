@@ -13,42 +13,49 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 		log.Printf("err parsing form: %v", err)
 		return
 	}
+
 	fileName := r.PostForm.Get("fileName")
+
 	dX, err := strconv.Atoi(r.PostForm.Get("dX"))
 	if err != nil {
 		log.Printf("error parsing dX: %v", err)
 		return
 	}
+
 	dY, err := strconv.Atoi(r.PostForm.Get("dY"))
 	if err != nil {
 		log.Printf("error parsing dY: %v", err)
 		return
 	}
+
 	log.Printf("cutting file: %v, dX: %v px, dY: %v px", filepath.Base(fileName), dX, dY)
 
 	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
-	s, ok := h.service.Session.Find(sessionID)
+	session, ok := h.service.Session.Find(sessionID)
 	if !ok {
 		log.Printf("Session not found")
 		w.WriteHeader(http.StatusNotFound)
+
 		return
 	}
 
-	if err := h.service.Files.CutFile(s, fileName, dX, dY); err != nil {
+	if err := h.service.Files.CutFile(session, fileName, dX, dY); err != nil {
 		log.Printf("error processing img: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	log.Printf("file %s succsesfully cut", filepath.Base(fileName))
-	h.ts.ExecuteTemplate(w, "cutGood.html", fileName)
+	_ = h.templates.ExecuteTemplate(w, "cutGood.html", fileName)
 }
 
 func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +65,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	s, ok := h.service.Session.Find(sessionID)
 	if !ok {
 		log.Printf("Session not found")
@@ -72,9 +80,9 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.ts.ExecuteTemplate(w, "home.html", filesList); err != nil {
+	if err := h.templates.ExecuteTemplate(w, "home.html", filesList); err != nil {
 		log.Println(err.Error())
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, "Internal Server Error")
 		return
 	}
@@ -85,10 +93,12 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
+
 	if err := r.ParseForm(); err != nil {
 		log.Printf("err parsing form: %v", err)
 		return
 	}
+
 	fileName := r.PostForm.Get("fileName")
 	log.Printf("downloading archive of: %v", fileName)
 
@@ -129,6 +139,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer uploadingFile.Close()
+
 	contentType := fileHeader.Header.Get("content-type")
 	fileName := fileHeader.Filename
 
@@ -159,7 +170,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	log.Printf("file %s succsesfully uploaded", fileName)
-	h.ts.ExecuteTemplate(w, "uploadGood.html", fileName)
+	_ = h.templates.ExecuteTemplate(w, "uploadGood.html", fileName)
 }
 
 func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
@@ -181,14 +192,14 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s, ok := h.service.Session.Find(sessionID)
+	session, ok := h.service.Session.Find(sessionID)
 	if !ok {
 		log.Printf("Session not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	if err := h.service.Files.DeleteFile(s, fileName); err != nil {
+	if err := h.service.Files.DeleteFile(session, fileName); err != nil {
 		log.Printf("unable to delete files")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -196,7 +207,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	log.Printf("file %s succsesfully deleted", fileName)
-	h.ts.ExecuteTemplate(w, "deleteGood.html", fileName)
+	_ = h.templates.ExecuteTemplate(w, "deleteGood.html", fileName)
 }
 
 // func newFileHandler(template *template.Template, service service.Service) *fileHandler {

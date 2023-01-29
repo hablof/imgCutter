@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,28 +52,45 @@ func (tf tempFiles) deleteFile(fileName string) error {
 }
 
 type Session struct {
-	id    uuid.UUID
-	files tempFiles
+	id        uuid.UUID
+	fileMutex sync.Mutex // лочим на работу с мапой tempFiles и на всё, что из пакета "os" (Create, Open, Mkdir...)
+	files     tempFiles
 }
 
+// returns string presintation of session's id
 func (s *Session) String() string {
 	return s.id.String()
 }
 
 type fileManager struct {
-	sessions map[string]*Session
+	sessionsMapMutex sync.Mutex
+	sessions         map[string]*Session
 }
 
-func (fm *fileManager) GetFiles(sessionID string) []myFile {
-	output := make([]myFile, 0, len(fm.sessions[sessionID].files))
-	for _, f := range fm.sessions[sessionID].files {
+// **************************************************
+// * МОЖЕТ ПЕРЕДАВАТЬ В ФУНКЦИЮ СЕССИЮ, А НЕ ID ??? *
+// **************************************************
+func (fm *fileManager) GetFiles(s *Session) ([]myFile, error) {
+	if s == nil {
+		return nil, errors.New("nil session")
+	}
+	output := make([]myFile, 0, len(s.files))
+	for _, f := range s.files {
 		output = append(output, f)
 	}
 	sort.Slice(output, func(i, j int) bool { return output[i].uploaded.After(output[j].uploaded) })
-	return output
+	return output, nil
 }
 
-func (fm *fileManager) CutFile(sessionID string, fileName string, dx int, dy int) error {
+func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) error {
+	if s == nil {
+		return errors.New("nil session")
+	}
+
+	// дальше функция состоит почти полностью из работы с файлами
+	s.fileMutex.Lock()
+	defer s.fileMutex.Unlock()
+
 	// открываем изображение
 	img, format, err := imgProcessing.OpenImage(fileName)
 	if err != nil {
@@ -107,22 +125,28 @@ func (fm *fileManager) CutFile(sessionID string, fileName string, dx int, dy int
 	}
 
 	// записываем путь архива в myFile
-	if err := fm.setArchivePath(sessionID, fileName, archive.Name()); err != nil {
+	if err := fm.setArchivePath(s, fileName, archive.Name()); err != nil {
 		log.Printf("error on set archive path: %v", err)
 		return err
 	}
 	return nil
 }
 
-func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fileName string) error {
+func (fm *fileManager) UploadFile(s *Session, uploadingFile io.Reader, fileName string) error {
+	if s == nil {
+		return errors.New("nil session")
+	}
+
+	s.fileMutex.Lock()
+	defer s.fileMutex.Unlock()
 	var localFile *os.File
 
-	if err := createDirIfNotExist(fmt.Sprintf("temp/%s", sessionID)); err != nil {
+	if err := createDirIfNotExist(fmt.Sprintf("temp/%s", s.String())); err != nil {
 		log.Println(err)
 		return ErrFS
 	}
 
-	localFile, err := os.Create(fmt.Sprintf("temp/%s/%s", sessionID, fileName))
+	localFile, err := os.Create(fmt.Sprintf("temp/%s/%s", s.String(), fileName))
 	if err != nil {
 		log.Printf("error creating file: %s", err)
 		return ErrFS
@@ -151,7 +175,7 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 		return ErrFS
 	}
 
-	fm.sessions[sessionID].files[localFile.Name()] = myFile{
+	s.files[localFile.Name()] = myFile{
 		OriginalFile: localFile.Name(),
 		Archive:      "",
 		uploaded:     time.Now(),
@@ -160,8 +184,12 @@ func (fm *fileManager) UploadFile(sessionID string, uploadingFile io.Reader, fil
 	return nil
 }
 
-func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string, error) {
-	f, ok := fm.sessions[sessionID].files[fileName]
+func (fm *fileManager) GetArchiveName(s *Session, fileName string) (string, error) {
+	if s == nil {
+		return "", errors.New("nil session")
+	}
+
+	f, ok := s.files[fileName]
 	if !ok {
 		return "", errors.New("on such file")
 	}
@@ -173,22 +201,32 @@ func (fm *fileManager) GetArchiveName(sessionID string, fileName string) (string
 	return f.Archive, nil
 }
 
-func (fm *fileManager) DeleteFile(sessionID string, fileName string) error {
+func (fm *fileManager) DeleteFile(s *Session, fileName string) error {
+	if s == nil {
+		return errors.New("nil session")
+	}
 
-	if err := fm.sessions[sessionID].files.deleteFile(fileName); err != nil {
+	s.fileMutex.Lock()
+	defer s.fileMutex.Unlock()
+
+	if err := s.files.deleteFile(fileName); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (fm *fileManager) setArchivePath(sessionID string, targetFileName string, archiveName string) error {
-	f, ok := fm.sessions[sessionID].files[targetFileName]
+func (fm *fileManager) setArchivePath(s *Session, targetFileName string, archiveName string) error {
+	if s == nil {
+		return errors.New("nil session")
+	}
+
+	f, ok := s.files[targetFileName]
 	if !ok {
 		return errors.New("on such file")
 	}
 	f.Archive = archiveName
-	fm.sessions[sessionID].files[targetFileName] = f
+	s.files[targetFileName] = f
 
 	return nil
 }

@@ -1,7 +1,6 @@
 package router
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -34,8 +33,16 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Files.CutFile(sessionID, fileName, dX, dY); err != nil {
+	s, ok := h.service.Session.Find(sessionID)
+	if !ok {
+		log.Printf("Session not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if err := h.service.Files.CutFile(s, fileName, dX, dY); err != nil {
 		log.Printf("error processing img: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -51,16 +58,26 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	s, ok := h.service.Session.Find(sessionID)
+	if !ok {
+		log.Printf("Session not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
 
-	buf := bytes.Buffer{}
-	if err := h.ts.ExecuteTemplate(&buf, "home.html", h.service.Files.GetFiles(sessionID)); err != nil {
+	filesList, err := h.service.Files.GetFiles(s)
+	if err != nil {
+		log.Printf("unable to get files list")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.ts.ExecuteTemplate(w, "home.html", filesList); err != nil {
 		log.Println(err.Error())
-		log.Print(buf.String())
 		w.WriteHeader(500)
 		fmt.Fprint(w, "Internal Server Error")
 		return
 	}
-	w.Write(buf.Bytes())
 }
 
 func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +99,14 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	archiveName, err := h.service.Files.GetArchiveName(sessionID, fileName)
+	s, ok := h.service.Session.Find(sessionID)
+	if !ok {
+		log.Printf("Session not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	archiveName, err := h.service.Files.GetArchiveName(s, fileName)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -121,7 +145,14 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Files.UploadFile(sessionID, uploadingFile, fileName); err != nil {
+	s, ok := h.service.Session.Find(sessionID)
+	if !ok {
+		log.Printf("Session not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if err := h.service.Files.UploadFile(s, uploadingFile, fileName); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -150,7 +181,14 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.Files.DeleteFile(sessionID, fileName); err != nil {
+	s, ok := h.service.Session.Find(sessionID)
+	if !ok {
+		log.Printf("Session not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if err := h.service.Files.DeleteFile(s, fileName); err != nil {
 		log.Printf("unable to delete files")
 		w.WriteHeader(http.StatusInternalServerError)
 		return

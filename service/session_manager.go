@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -22,14 +23,17 @@ func (fm *fileManager) New() *Session {
 	var ses Session
 	for {
 		ses = Session{
-			id:    uuid.New(),
-			files: map[string]myFile{},
+			id:        uuid.New(),
+			fileMutex: sync.Mutex{},
+			files:     map[string]myFile{},
 		}
 		if _, ok := fm.sessions[ses.id.String()]; !ok {
 			break
 		}
 	}
+	fm.sessionsMapMutex.Lock()
 	fm.sessions[ses.id.String()] = &ses
+	fm.sessionsMapMutex.Unlock()
 	return &ses
 }
 
@@ -42,7 +46,9 @@ func (fm *fileManager) TerminateSession(sessionID string) error {
 		log.Printf("unable to remove session files: %v", err)
 		return err
 	}
+	fm.sessionsMapMutex.Lock()
 	delete(fm.sessions, sessionID)
+	fm.sessionsMapMutex.Unlock()
 	return nil
 }
 

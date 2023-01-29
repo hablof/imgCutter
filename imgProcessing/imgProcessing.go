@@ -148,14 +148,14 @@ func PackImages(dest *zip.Writer, images [][]image.Image, namePrefix string) err
 	digitsByX := countDigits(len(images))
 	digitsByY := countDigits(len(images[0]))
 	fileNameTemplate := fmt.Sprintf("%%s%%0%ddx%%0%dd.jpeg", digitsByX, digitsByY) // "%s%0Xdx%0Yd.jpeg", digitsByX = 2, digitsByY = 4 -> "%s%02dx%04d.jpeg"
+	o := jpeg.Options{
+		Quality: 100,
+	}
 	for x, sliceByX := range images {
 		for y, image := range sliceByX {
 			w, err := dest.Create(fmt.Sprintf(fileNameTemplate, namePrefix, x+1, y+1))
 			if err != nil {
 				return err
-			}
-			o := jpeg.Options{
-				Quality: 100,
 			}
 			err = jpeg.Encode(w, image, &o)
 			if err != nil {

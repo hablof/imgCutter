@@ -25,7 +25,7 @@ var (
 	ErrNilSession   = errors.New("nil session")
 )
 
-type myFile struct {
+type MyFile struct {
 	// Full-OriginalFile like path/OriginalFile.ext
 	OriginalFile string // export to templates
 
@@ -36,7 +36,7 @@ type myFile struct {
 }
 
 // key type is Full-Name like path/Name.ext .
-type tempFiles map[string]myFile
+type tempFiles map[string]MyFile
 
 func (tf tempFiles) deleteFile(fileName string) error {
 	file, ok := tf[fileName]
@@ -73,12 +73,12 @@ type fileManager struct {
 	sessions         map[string]*Session
 }
 
-func (fm *fileManager) GetFiles(s *Session) ([]myFile, error) {
+func (fm *fileManager) GetFiles(s *Session) ([]MyFile, error) {
 	if s == nil {
 		return nil, ErrNilSession
 	}
 
-	output := make([]myFile, 0, len(s.files))
+	output := make([]MyFile, 0, len(s.files))
 	for _, f := range s.files {
 		output = append(output, f)
 	}
@@ -192,7 +192,7 @@ func (fm *fileManager) UploadFile(session *Session, uploadingFile io.Reader, fil
 		return ErrFS
 	}
 
-	session.files[localFile.Name()] = myFile{
+	session.files[localFile.Name()] = MyFile{
 		OriginalFile: localFile.Name(),
 		Archive:      "",
 		uploaded:     time.Now(),

@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+//go:generate mockgen -source=service.go -destination=mock_service.go -package=service
+
 type SessionService interface {
 	Find(id string) (s *Session, ok bool)
 	New() *Session
@@ -14,7 +16,7 @@ type SessionService interface {
 }
 
 type FileService interface {
-	GetFiles(s *Session) ([]myFile, error)
+	GetFiles(s *Session) ([]MyFile, error)
 	UploadFile(s *Session, uploadingFile io.Reader, fileName string) error
 	CutFile(s *Session, fileName string, dX int, dY int) error
 	DeleteFile(s *Session, fileName string) error

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		log.Printf("err parsing form: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+
 		return
 	}
 
@@ -19,12 +22,16 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	dX, err := strconv.Atoi(r.PostForm.Get("dX"))
 	if err != nil {
 		log.Printf("error parsing dX: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+
 		return
 	}
 
 	dY, err := strconv.Atoi(r.PostForm.Get("dY"))
 	if err != nil {
 		log.Printf("error parsing dY: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+
 		return
 	}
 
@@ -53,9 +60,20 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	log.Printf("file %s succsesfully cut", filepath.Base(fileName))
-	_ = h.templates.ExecuteTemplate(w, "cutGood.html", fileName)
+
+	b := bytes.Buffer{}
+
+	if err := h.templates.ExecuteTemplate(&b, "cutGood.html", fileName); err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
+
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, b.String())
 }
 
 func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +81,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -70,6 +89,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("Session not found")
 		w.WriteHeader(http.StatusNotFound)
+
 		return
 	}
 
@@ -77,15 +97,22 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("unable to get files list")
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
-	if err := h.templates.ExecuteTemplate(w, "home.html", filesList); err != nil {
+	b := bytes.Buffer{}
+
+	if err := h.templates.ExecuteTemplate(&b, "home.html", filesList); err != nil {
 		log.Println(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprint(w, "Internal Server Error")
+
 		return
 	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, b.String())
 }
 
 func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {

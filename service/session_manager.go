@@ -31,7 +31,7 @@ func (fm *fileManager) New() *Session {
 		session = Session{
 			id:        uuid.New(),
 			fileMutex: sync.Mutex{},
-			files:     map[string]myFile{},
+			files:     map[string]MyFile{},
 		}
 		if _, ok := fm.sessions[session.id.String()]; !ok {
 			break

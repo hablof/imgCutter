@@ -2,6 +2,7 @@ package router
 
 import (
 	"html/template"
+	"io"
 	"net/http"
 	"path/filepath"
 
@@ -9,8 +10,13 @@ import (
 )
 
 type Handler struct {
-	templates *template.Template
+	templates templateExecutor
 	service   service.Service
+}
+
+//go:generate mockgen -source=handler.go -destination=mock_template.go -package=router
+type templateExecutor interface {
+	ExecuteTemplate(wr io.Writer, name string, data any) error
 }
 
 func NewRouter(s service.Service) (*Handler, error) {

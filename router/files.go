@@ -47,7 +47,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 
 	session, ok := h.service.Session.Find(sessionID)
 	if !ok {
-		log.Printf("Session not found")
+		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
 
 		return
@@ -87,7 +87,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 
 	s, ok := h.service.Session.Find(sessionID)
 	if !ok {
-		log.Printf("Session not found")
+		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
 
 		return
@@ -123,6 +123,8 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 
 	if err := r.ParseForm(); err != nil {
 		log.Printf("err parsing form: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+
 		return
 	}
 
@@ -133,19 +135,23 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
 	s, ok := h.service.Session.Find(sessionID)
 	if !ok {
-		log.Printf("Session not found")
+		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
+
 		return
 	}
 
 	archiveName, err := h.service.Files.GetArchiveName(s, fileName)
 	if err != nil {
+		log.Printf("error getting archive name: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
@@ -185,7 +191,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	s, ok := h.service.Session.Find(sessionID)
 	if !ok {
-		log.Printf("Session not found")
+		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -222,7 +228,7 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 
 	session, ok := h.service.Session.Find(sessionID)
 	if !ok {
-		log.Printf("Session not found")
+		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}

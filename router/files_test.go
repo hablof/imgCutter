@@ -85,7 +85,7 @@ func TestRouter_CutFile(t *testing.T) {
 			responseCode: http.StatusInternalServerError,
 		},
 		{
-			name:        "Session not found",
+			name:        "session not found",
 			sessionID:   "unknown-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "250", "dY": "250"},
 			cutParams:   cutParams{},
@@ -102,7 +102,7 @@ func TestRouter_CutFile(t *testing.T) {
 			responseCode: http.StatusNotFound,
 		},
 		{
-			name:        "template fail",
+			name:        "template error",
 			sessionID:   "random-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "250", "dY": "250"},
 			cutParams:   cutParams{"filename", 250, 250},
@@ -189,6 +189,80 @@ func TestRouter_MainPage(t *testing.T) {
 				}}).Return(nil)
 			},
 			responseCode: 200,
+		},
+		{
+			name:      "no ctx value",
+			sessionID: "some-session-id",
+			requestModification: func(r *http.Request, sessionID string) *http.Request {
+				return r
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor) {
+			},
+			responseCode: http.StatusInternalServerError,
+		},
+		{
+			name:      "session not found",
+			sessionID: "unknown-id",
+			requestModification: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, false)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor) {
+			},
+			responseCode: http.StatusNotFound,
+		},
+		{
+			name:      "unable to get files list",
+			sessionID: "some-session-id",
+			requestModification: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session) {
+				mfs.EXPECT().GetFiles(&service.Session{}).Return(nil, errors.New("some service err"))
+			},
+			templateBehavior: func(te *MocktemplateExecutor) {
+			},
+			responseCode: http.StatusInternalServerError,
+		},
+		{
+			name:      "template error",
+			sessionID: "some-session-id",
+			requestModification: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session) {
+				mfs.EXPECT().GetFiles(&service.Session{}).Return([]service.MyFile{{
+					OriginalFile: "1.jpg",
+					Archive:      "1.zip",
+				}, {
+					OriginalFile: "2.jpg",
+					Archive:      "2.zip",
+				}}, nil)
+			},
+			templateBehavior: func(te *MocktemplateExecutor) {
+				te.EXPECT().ExecuteTemplate(&bytes.Buffer{}, "home.html", []service.MyFile{{
+					OriginalFile: "1.jpg",
+					Archive:      "1.zip",
+				}, {
+					OriginalFile: "2.jpg",
+					Archive:      "2.zip",
+				}}).Return(errors.New("some template execution error"))
+			},
+			responseCode: http.StatusInternalServerError,
 		},
 	}
 

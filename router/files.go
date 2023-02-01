@@ -166,9 +166,27 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
+	if !ok {
+		log.Printf("unable to get context value")
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	s, ok := h.service.Session.Find(sessionID)
+	if !ok {
+		log.Printf("session not found")
+		w.WriteHeader(http.StatusNotFound)
+
+		return
+	}
+
 	uploadingFile, fileHeader, err := r.FormFile("uploadingFile")
 	if err != nil {
-		log.Println(err)
+		log.Printf("FormFile error: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+
 		return
 	}
 	defer uploadingFile.Close()
@@ -177,22 +195,10 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	fileName := fileHeader.Filename
 
 	if !(contentType == "image/jpeg" || contentType == "image/png") {
+		log.Printf("invalid fileHeader content-type: %s", contentType)
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "file must be ДЖИПЕГ (or .png)")
-		return
-	}
 
-	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
-	if !ok {
-		log.Printf("unable to get context value")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	s, ok := h.service.Session.Find(sessionID)
-	if !ok {
-		log.Printf("session not found")
-		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -201,9 +207,19 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	b := bytes.Buffer{}
+
+	if err := h.templates.ExecuteTemplate(&b, "uploadGood.html", fileName); err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
+
+		return
+	}
+
 	log.Printf("file %s succsesfully uploaded", fileName)
-	_ = h.templates.ExecuteTemplate(w, "uploadGood.html", fileName)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, b.String())
 }
 
 func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {

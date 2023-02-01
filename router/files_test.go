@@ -3,11 +3,17 @@ package router
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"errors"
+	"fmt"
 	"imgcutter/service"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"net/url"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -27,7 +33,7 @@ func TestRouter_CutFile(t *testing.T) {
 		sessionID               string
 		formContent             map[string]string
 		cutParams               cutParams
-		requestModification     func(r *http.Request, sessionID string) *http.Request
+		ctxRequest              func(r *http.Request, sessionID string) *http.Request
 		sessionServiceBehaviour func(ss *service.MockSessionService, sessionID string)
 		fileServiceBehaviour    func(fs *service.MockFileService, session *service.Session, cutParams cutParams)
 		templateBehavior        func(te *MocktemplateExecutor, filename string)
@@ -38,7 +44,7 @@ func TestRouter_CutFile(t *testing.T) {
 			sessionID:   "random-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "250", "dY": "250"},
 			cutParams:   cutParams{"filename", 250, 250},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(ss *service.MockSessionService, sessionID string) {
@@ -57,7 +63,7 @@ func TestRouter_CutFile(t *testing.T) {
 			sessionID:   "random-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "dvesti", "dY": "250"},
 			cutParams:   cutParams{},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(ss *service.MockSessionService, sessionID string) {
@@ -73,7 +79,7 @@ func TestRouter_CutFile(t *testing.T) {
 			sessionID:   "",
 			formContent: map[string]string{"fileName": "filename", "dX": "250", "dY": "250"},
 			cutParams:   cutParams{},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r
 			},
 			sessionServiceBehaviour: func(ss *service.MockSessionService, sessionID string) {
@@ -89,7 +95,7 @@ func TestRouter_CutFile(t *testing.T) {
 			sessionID:   "unknown-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "250", "dY": "250"},
 			cutParams:   cutParams{},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(ss *service.MockSessionService, sessionID string) {
@@ -106,7 +112,7 @@ func TestRouter_CutFile(t *testing.T) {
 			sessionID:   "random-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "250", "dY": "250"},
 			cutParams:   cutParams{"filename", 250, 250},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(ss *service.MockSessionService, sessionID string) {
@@ -148,7 +154,7 @@ func TestRouter_CutFile(t *testing.T) {
 			r, _ := http.NewRequest(http.MethodPost, "/cut", bytes.NewBufferString(params.Encode()))
 			r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-			ctxr := tc.requestModification(r, tc.sessionID)
+			ctxr := tc.ctxRequest(r, tc.sessionID)
 
 			handler.CutFile(w, ctxr)
 
@@ -161,7 +167,7 @@ func TestRouter_MainPage(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		sessionID               string
-		requestModification     func(r *http.Request, sessionID string) *http.Request
+		ctxRequest              func(r *http.Request, sessionID string) *http.Request
 		sessionServiceBehaviour func(mss *service.MockSessionService, sessionID string)
 		fileServiceBehaviour    func(mfs *service.MockFileService, session *service.Session)
 		templateBehavior        func(te *MocktemplateExecutor)
@@ -170,7 +176,7 @@ func TestRouter_MainPage(t *testing.T) {
 		{
 			name:      "ok",
 			sessionID: "random-uuid",
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -193,7 +199,7 @@ func TestRouter_MainPage(t *testing.T) {
 		{
 			name:      "no ctx value",
 			sessionID: "some-session-id",
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -207,7 +213,7 @@ func TestRouter_MainPage(t *testing.T) {
 		{
 			name:      "session not found",
 			sessionID: "unknown-id",
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -222,7 +228,7 @@ func TestRouter_MainPage(t *testing.T) {
 		{
 			name:      "unable to get files list",
 			sessionID: "some-session-id",
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -238,7 +244,7 @@ func TestRouter_MainPage(t *testing.T) {
 		{
 			name:      "template error",
 			sessionID: "some-session-id",
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -287,7 +293,7 @@ func TestRouter_MainPage(t *testing.T) {
 			r, _ := http.NewRequest(http.MethodGet, "/", nil)
 			r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-			ctxr := tc.requestModification(r, tc.sessionID)
+			ctxr := tc.ctxRequest(r, tc.sessionID)
 			handler.MainPage(w, ctxr)
 		})
 	}
@@ -299,7 +305,7 @@ func TestRouter_DownloadFile(t *testing.T) {
 		sessionID               string
 		fileName                string
 		formContent             map[string]string
-		requestModification     func(r *http.Request, sessionID string) *http.Request
+		ctxRequest              func(r *http.Request, sessionID string) *http.Request
 		sessionServiceBehaviour func(mss *service.MockSessionService, sessionID string)
 		fileServiceBehaviour    func(mfs *service.MockFileService, session *service.Session, fileName string)
 		responseCode            int
@@ -309,7 +315,7 @@ func TestRouter_DownloadFile(t *testing.T) {
 			sessionID:   "some-session-id",
 			fileName:    "filename.jpg",
 			formContent: map[string]string{"fileName": "filename.jpg"},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -325,7 +331,7 @@ func TestRouter_DownloadFile(t *testing.T) {
 			sessionID:   "some-session-id",
 			fileName:    "",
 			formContent: map[string]string{},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -339,7 +345,7 @@ func TestRouter_DownloadFile(t *testing.T) {
 			sessionID:   "some-session-id",
 			fileName:    "filename.jpg",
 			formContent: map[string]string{"fileName": "filename.jpg"},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -354,7 +360,7 @@ func TestRouter_DownloadFile(t *testing.T) {
 			sessionID:   "some-session-id",
 			fileName:    "filename.jpg",
 			formContent: map[string]string{"fileName": "filename.jpg"},
-			requestModification: func(r *http.Request, sessionID string) *http.Request {
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
 			},
 			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
@@ -392,7 +398,7 @@ func TestRouter_DownloadFile(t *testing.T) {
 			r, _ := http.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(params.Encode()))
 			r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-			ctxr := tc.requestModification(r, tc.sessionID)
+			ctxr := tc.ctxRequest(r, tc.sessionID)
 
 			handler.DownloadFile(w, ctxr)
 
@@ -403,15 +409,218 @@ func TestRouter_DownloadFile(t *testing.T) {
 
 func TestRouter_UploadFile(t *testing.T) {
 	testCases := []struct {
-		name string
+		name                    string
+		sessionID               string
+		attachFile              bool
+		fileName                string
+		contentType             string
+		ctxRequest              func(r *http.Request, sessionID string) *http.Request
+		sessionServiceBehaviour func(mss *service.MockSessionService, sessionID string)
+		fileServiceBehaviour    func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string)
+		templateBehavior        func(te *MocktemplateExecutor, fileName string)
+		responseCode            int
 	}{
 		{
-			name: "",
+			name:        "ok",
+			sessionID:   "some-session-id",
+			attachFile:  true,
+			fileName:    "test.jpg",
+			contentType: "image/jpeg",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+				mfs.EXPECT().UploadFile(&service.Session{}, gomock.Any(), fileName).Do(func(s *service.Session, uploadingFile io.Reader, fileName string) {
+					referenceBytes, err := io.ReadAll(referenceFile)
+					assert.Equal(t, err, nil)
+					incomingBytes, err := io.ReadAll(uploadingFile)
+					assert.Equal(t, err, nil)
+					md5.Sum(referenceBytes)
+					assert.Equal(t, md5.Sum(incomingBytes), md5.Sum(referenceBytes))
+				}).Return(nil)
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+				te.EXPECT().ExecuteTemplate(&bytes.Buffer{}, "uploadGood.html", fileName).Return(nil)
+			},
+			responseCode: http.StatusOK,
+		},
+		{
+			name:        "no ctx value",
+			sessionID:   "",
+			attachFile:  false,
+			fileName:    "",
+			contentType: "",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusInternalServerError,
+		},
+		{
+			name:        "session not found",
+			sessionID:   "unknown-session-id",
+			attachFile:  false,
+			fileName:    "",
+			contentType: "",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, false)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusNotFound,
+		},
+		{
+			name:        "no files",
+			sessionID:   "some-session-id",
+			attachFile:  false,
+			fileName:    "",
+			contentType: "",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusBadRequest,
+		},
+		{
+			name:        "wrong contetnt type",
+			sessionID:   "some-session-id",
+			attachFile:  true,
+			fileName:    "test.jpg",
+			contentType: "wrong-contetnt-type",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusBadRequest,
+		},
+		{
+			name:        "service error",
+			sessionID:   "some-session-id",
+			attachFile:  true,
+			fileName:    "test.jpg",
+			contentType: "image/jpeg",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+				mfs.EXPECT().UploadFile(&service.Session{}, gomock.Any(), fileName).Do(func(s *service.Session, uploadingFile io.Reader, fileName string) {
+					referenceBytes, err := io.ReadAll(referenceFile)
+					assert.Equal(t, err, nil)
+					incomingBytes, err := io.ReadAll(uploadingFile)
+					assert.Equal(t, err, nil)
+					md5.Sum(referenceBytes)
+					assert.Equal(t, md5.Sum(incomingBytes), md5.Sum(referenceBytes))
+				}).Return(errors.New("some service error"))
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusInternalServerError,
+		},
+		{
+			name:        "template error",
+			sessionID:   "some-session-id",
+			attachFile:  true,
+			fileName:    "test.jpg",
+			contentType: "image/jpeg",
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, referenceFile io.Reader, fileName string) {
+				mfs.EXPECT().UploadFile(&service.Session{}, gomock.Any(), fileName).Do(func(s *service.Session, uploadingFile io.Reader, fileName string) {
+					referenceBytes, err := io.ReadAll(referenceFile)
+					assert.Equal(t, err, nil)
+					incomingBytes, err := io.ReadAll(uploadingFile)
+					assert.Equal(t, err, nil)
+					md5.Sum(referenceBytes)
+					assert.Equal(t, md5.Sum(incomingBytes), md5.Sum(referenceBytes))
+				}).Return(nil)
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+				te.EXPECT().ExecuteTemplate(&bytes.Buffer{}, "uploadGood.html", fileName).Return(errors.New("some template error"))
+			},
+			responseCode: http.StatusInternalServerError,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			c := gomock.NewController(t)
+			defer c.Finish()
 
+			ss := service.NewMockSessionService(c)
+			fs := service.NewMockFileService(c)
+			te := NewMocktemplateExecutor(c)
+			handler := Handler{
+				templates: te,
+				service:   service.Service{Files: fs, Session: ss},
+			}
+
+			tc.sessionServiceBehaviour(ss, tc.sessionID)
+			tc.templateBehavior(te, tc.fileName)
+
+			testFile, err := os.Open("test.jpg")
+			assert.Equal(t, err, nil)
+			defer testFile.Close()
+
+			buf := bytes.Buffer{}
+			var r *http.Request
+
+			if tc.attachFile {
+				multipartWriter := multipart.NewWriter(&buf)
+				header := make(textproto.MIMEHeader)
+				header.Set("content-disposition", fmt.Sprintf(`form-data; name="uploadingFile"; filename="%s"`, tc.fileName))
+				header.Set("content-type", tc.contentType)
+
+				partWriter, err := multipartWriter.CreatePart(header)
+				assert.Equal(t, err, nil)
+
+				_, err = io.Copy(partWriter, testFile)
+				assert.Equal(t, err, nil)
+				multipartWriter.Close() // writes the trailing boundary end line to the output
+
+				testFile.Seek(0, 0)
+				r, _ = http.NewRequest(http.MethodPost, "/", &buf)
+				r.Header.Add("Content-Type", multipartWriter.FormDataContentType())
+			} else {
+				r, _ = http.NewRequest(http.MethodPost, "/", nil)
+			}
+
+			tc.fileServiceBehaviour(fs, &service.Session{}, testFile, tc.fileName)
+
+			w := httptest.NewRecorder()
+
+			ctxr := tc.ctxRequest(r, tc.sessionID)
+			handler.UploadFile(w, ctxr)
 		})
 	}
 }

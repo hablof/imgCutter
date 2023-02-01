@@ -59,6 +59,22 @@ func TestRouter_CutFile(t *testing.T) {
 			responseCode: http.StatusOK,
 		},
 		{
+			name:        "missing field fileName",
+			sessionID:   "random-uuid",
+			formContent: map[string]string{"dX": "250", "dY": "250"},
+			cutParams:   cutParams{"filename", 250, 250},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(ss *service.MockSessionService, sessionID string) {
+			},
+			fileServiceBehaviour: func(fs *service.MockFileService, session *service.Session, cutParams cutParams) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusBadRequest,
+		},
+		{
 			name:        "err parsing int",
 			sessionID:   "random-uuid",
 			formContent: map[string]string{"fileName": "filename", "dX": "dvesti", "dY": "250"},
@@ -327,10 +343,24 @@ func TestRouter_DownloadFile(t *testing.T) {
 			responseCode: http.StatusMovedPermanently, // http.ServeFile() делает редирект
 		},
 		{
+			name:        "missing field fileName",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, session *service.Session, fileName string) {
+			},
+			responseCode: http.StatusBadRequest, // http.ServeFile() делает редирект
+		},
+		{
 			name:        "no ctx value",
 			sessionID:   "some-session-id",
 			fileName:    "",
-			formContent: map[string]string{},
+			formContent: map[string]string{"fileName": "filename.jpg"},
 			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
 				return r
 			},
@@ -627,15 +657,154 @@ func TestRouter_UploadFile(t *testing.T) {
 
 func TestRouter_DeleteFile(t *testing.T) {
 	testCases := []struct {
-		name string
+		name                    string
+		sessionID               string
+		fileName                string
+		formContent             map[string]string
+		ctxRequest              func(r *http.Request, sessionID string) *http.Request
+		sessionServiceBehaviour func(mss *service.MockSessionService, sessionID string)
+		fileServiceBehaviour    func(mfs *service.MockFileService, fileName string)
+		templateBehavior        func(te *MocktemplateExecutor, fileName string)
+		responseCode            int
 	}{
 		{
-			name: "",
+			name:        "ok",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{"fileName": "filename.jpg"},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, fileName string) {
+				mfs.EXPECT().DeleteFile(&service.Session{}, fileName).Return(nil)
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+				te.EXPECT().ExecuteTemplate(&bytes.Buffer{}, "deleteGood.html", fileName).Return(nil)
+			},
+			responseCode: http.StatusOK,
+		},
+		{
+			name:        "no ctx value",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{"fileName": "filename.jpg"},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusInternalServerError,
+		},
+		{
+			name:        "session not found",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{"fileName": "filename.jpg"},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, false)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusNotFound,
+		},
+		{
+			name:        "missing field fileName",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, fileName string) {
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusBadRequest,
+		},
+		{
+			name:        "service error",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{"fileName": "filename.jpg"},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, fileName string) {
+				mfs.EXPECT().DeleteFile(&service.Session{}, fileName).Return(errors.New("some service error"))
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+			},
+			responseCode: http.StatusInternalServerError,
+		},
+		{
+			name:        "template error",
+			sessionID:   "some-session-id",
+			fileName:    "filename.jpg",
+			formContent: map[string]string{"fileName": "filename.jpg"},
+			ctxRequest: func(r *http.Request, sessionID string) *http.Request {
+				return r.WithContext(context.WithValue(context.Background(), ctxSessionKey, sessionID))
+			},
+			sessionServiceBehaviour: func(mss *service.MockSessionService, sessionID string) {
+				mss.EXPECT().Find(sessionID).Return(&service.Session{}, true)
+			},
+			fileServiceBehaviour: func(mfs *service.MockFileService, fileName string) {
+				mfs.EXPECT().DeleteFile(&service.Session{}, fileName).Return(nil)
+			},
+			templateBehavior: func(te *MocktemplateExecutor, fileName string) {
+				te.EXPECT().ExecuteTemplate(&bytes.Buffer{}, "deleteGood.html", fileName).Return(errors.New("template error"))
+			},
+			responseCode: http.StatusInternalServerError,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			c := gomock.NewController(t)
+			defer c.Finish()
 
+			ss := service.NewMockSessionService(c)
+			fs := service.NewMockFileService(c)
+			te := NewMocktemplateExecutor(c)
+			handler := Handler{
+				templates: te,
+				service:   service.Service{Files: fs, Session: ss},
+			}
+
+			tc.sessionServiceBehaviour(ss, tc.sessionID)
+			tc.fileServiceBehaviour(fs, tc.fileName)
+			tc.templateBehavior(te, tc.fileName)
+
+			params := url.Values{}
+			for k, v := range tc.formContent {
+				params.Add(k, v)
+			}
+
+			w := httptest.NewRecorder()
+			r, _ := http.NewRequest(http.MethodPost, "/delete", bytes.NewBufferString(params.Encode()))
+			r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+			ctxr := tc.ctxRequest(r, tc.sessionID)
+
+			handler.DeleteFile(w, ctxr)
+
+			assert.Equal(t, w.Result().StatusCode, tc.responseCode)
 		})
 	}
 }

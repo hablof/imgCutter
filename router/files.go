@@ -13,16 +13,25 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		log.Printf("err parsing form: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
 
 		return
 	}
 
+	if !r.PostForm.Has("fileName") {
+		log.Printf(`request form missing field "fileName"`)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
+
+		return
+	}
 	fileName := r.PostForm.Get("fileName")
 
 	dX, err := strconv.Atoi(r.PostForm.Get("dX"))
 	if err != nil {
 		log.Printf("error parsing dX: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
 
 		return
 	}
@@ -31,6 +40,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("error parsing dY: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
 
 		return
 	}
@@ -41,6 +51,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -49,6 +60,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "Bad Session")
 
 		return
 	}
@@ -56,6 +68,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.Files.CutFile(session, fileName, dX, dY); err != nil {
 		log.Printf("error processing img: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -73,7 +86,7 @@ func (h *Handler) CutFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, b.String())
+	w.Write(b.Bytes())
 }
 
 func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +94,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -89,6 +103,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "Bad Session")
 
 		return
 	}
@@ -97,6 +112,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("unable to get files list")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -112,7 +128,7 @@ func (h *Handler) MainPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, b.String())
+	w.Write(b.Bytes())
 }
 
 func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +144,13 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !r.PostForm.Has("fileName") {
+		log.Printf(`request form missing field "fileName"`)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
+
+		return
+	}
 	fileName := r.PostForm.Get("fileName")
 	log.Printf("downloading archive of: %v", fileName)
 
@@ -135,6 +158,7 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -143,6 +167,7 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "Bad Session")
 
 		return
 	}
@@ -151,6 +176,7 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("error getting archive name: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -170,6 +196,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
 
 		return
 	}
@@ -178,6 +205,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "Bad Session")
 
 		return
 	}
@@ -186,6 +214,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("FormFile error: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
 
 		return
 	}
@@ -197,13 +226,15 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if !(contentType == "image/jpeg" || contentType == "image/png") {
 		log.Printf("invalid fileHeader content-type: %s", contentType)
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "file must be ДЖИПЕГ (or .png)")
+		fmt.Fprint(w, "file must be .jpg (or .png)")
 
 		return
 	}
 
 	if err := h.service.Files.UploadFile(s, uploadingFile, fileName); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
+
 		return
 	}
 
@@ -219,7 +250,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("file %s succsesfully uploaded", fileName)
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, b.String())
+	w.Write(b.Bytes())
 }
 
 func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
@@ -228,17 +259,12 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		log.Printf("err parsing form: %v", err)
-		return
-	}
-
-	fileName := r.PostForm.Get("fileName")
-
 	sessionID, ok := r.Context().Value(ctxSessionKey).(string)
 	if !ok {
 		log.Printf("unable to get context value")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
+
 		return
 	}
 
@@ -246,23 +272,47 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		log.Printf("session not found")
 		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "Bad Session")
+
 		return
 	}
+
+	if err := r.ParseForm(); err != nil {
+		log.Printf("err parsing form: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
+
+		return
+	}
+
+	if !r.PostForm.Has("fileName") {
+		log.Printf(`request form missing field "fileName"`)
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Bad Request")
+
+		return
+	}
+	fileName := r.PostForm.Get("fileName")
 
 	if err := h.service.Files.DeleteFile(session, fileName); err != nil {
 		log.Printf("unable to delete files")
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
+
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	log.Printf("file %s succsesfully deleted", fileName)
-	_ = h.templates.ExecuteTemplate(w, "deleteGood.html", fileName)
-}
+	b := bytes.Buffer{}
 
-// func newFileHandler(template *template.Template, service service.Service) *fileHandler {
-// 	return &fileHandler{
-// 		ts:      template,
-// 		service: service,
-// 	}
-// }
+	if err := h.templates.ExecuteTemplate(&b, "deleteGood.html", fileName); err != nil {
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Internal Server Error")
+
+		return
+	}
+
+	log.Printf("file %s succsesfully deleted", fileName)
+	w.WriteHeader(http.StatusOK)
+	w.Write(b.Bytes())
+}

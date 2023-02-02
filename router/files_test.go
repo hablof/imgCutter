@@ -311,6 +311,7 @@ func TestRouter_MainPage(t *testing.T) {
 
 			ctxr := tc.ctxRequest(r, tc.sessionID)
 			handler.MainPage(w, ctxr)
+			assert.Equal(t, w.Result().StatusCode, tc.responseCode)
 		})
 	}
 }
@@ -651,6 +652,7 @@ func TestRouter_UploadFile(t *testing.T) {
 
 			ctxr := tc.ctxRequest(r, tc.sessionID)
 			handler.UploadFile(w, ctxr)
+			assert.Equal(t, w.Result().StatusCode, tc.responseCode)
 		})
 	}
 }

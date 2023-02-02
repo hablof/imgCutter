@@ -17,7 +17,7 @@ const (
 
 func (h *Handler) Logging(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println()
+		fmt.Println() // делает пустую строку в логе -- разделяет сообщения для читаемости
 		log.Printf("request: %s %s %s", r.Host, r.Method, r.URL.String())
 		// log.Print(h.service.Session.GetAll())
 		f(w, r)

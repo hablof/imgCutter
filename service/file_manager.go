@@ -59,7 +59,7 @@ func (tf tempFiles) deleteFile(fileName string) error {
 
 type Session struct {
 	id        uuid.UUID
-	fileMutex sync.Mutex // лочим на работу с мапой tempFiles и на всё, что из пакета "os" (Create, Open, Mkdir...)
+	fileMutex sync.Mutex // лочим на работу с мапой tempFiles и на всё из пакета "os" (Create, Open, Mkdir...)
 	files     tempFiles
 }
 
@@ -105,6 +105,14 @@ func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) erro
 
 	log.Printf("Decoded format is: %s", format)
 
+	// режем изображение
+	images, err := imgprocessing.CutImage(img, dx, dy)
+	if err != nil {
+		e := fmt.Errorf("error on cut img: %w", err)
+		log.Println(e)
+		return e
+	}
+
 	// создаём архив
 	// archiveName = path + name, без расширениея
 	archiveName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
@@ -120,14 +128,6 @@ func (fm *fileManager) CutFile(s *Session, fileName string, dx int, dy int) erro
 
 	zipWriter := zip.NewWriter(archive)
 	defer zipWriter.Close()
-
-	// режем изображение
-	images, err := imgprocessing.CutImage(img, dx, dy)
-	if err != nil {
-		e := fmt.Errorf("error on cut img: %w", err)
-		log.Println(e)
-		return e
-	}
 
 	// пакуем в архив
 	if err := imgprocessing.PackImages(zipWriter, images, filepath.Base(archiveName)); err != nil {

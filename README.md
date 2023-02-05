@@ -46,7 +46,7 @@
 
 `router` имеет `middleware` для логгирования входящих *http*-*запросов* и для управления *cookie*
 
-### Docker Hub
+## Docker Hub
 Образ сервиса размещён на https://hub.docker.com/r/hablof/imgcutter
 
 Docker Pull Command:
